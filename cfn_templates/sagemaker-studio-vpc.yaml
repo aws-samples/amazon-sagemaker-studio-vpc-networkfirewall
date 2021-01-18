@@ -1,0 +1,64 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: "This template creates the infrastructure required to implement and test SageMaker Studio VPC Mode. 
+  It creates a VPC, Subnet, VPC Endpoints, VPC Policies, and IAM Execution Roles. 
+  **WARNING** This template creates AWS Resources in your account. 
+  You will be billed for the AWS resources used if you create a stack from this template."
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: sagemaker-studio-vpc
+  VpcCIDR:
+    Type: String
+    Default: 10.2.0.0/16
+  FirewallSubnetCIDR:
+    Type: String
+    Default: 10.2.1.0/24
+  NATGatewaySubnetCIDR:
+    Type: String
+    Default: 10.2.2.0/24
+  SageMakerStudioSubnetCIDR:
+    Type: String
+    Default: 10.2.3.0/24
+
+Resources:
+  #================================================================================
+  # IAM ROLE AND KMS ENCRYPTION KEY 
+  #================================================================================
+  IAM:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: S3
+    Properties:
+      Parameters:
+        ProjectName: !Ref ProjectName
+        DataBucket: !GetAtt S3.Outputs.DataBucket
+        ModelBucket: !GetAtt S3.Outputs.ModelBucket
+      TemplateURL:  iam.yaml
+  #================================================================================
+  # S3 BUCKETS - DATA BUCKET AND MODEL BUCKET 
+  #================================================================================
+  S3:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: VPC
+    Properties:
+      Parameters:
+        ProjectName: !Ref ProjectName
+        DataBucketName: !Sub ${ProjectName}-data
+        ModelBucketName: !Sub ${ProjectName}-models
+      TemplateURL:  s3.yaml
+  #================================================================================
+  # VPC WITH A PRIVATE SUBNET AND SECURITY GROUP 
+  #================================================================================
+  VPC:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      Parameters:
+        ProjectName: !Ref ProjectName
+        VpcCIDR: !Ref VpcCIDR
+        FirewallSubnetCIDR: !Ref FirewallSubnetCIDR
+        NATGatewaySubnetCIDR: !Ref NATGatewaySubnetCIDR
+        SageMakerStudioSubnetCIDR: !Ref SageMakerStudioSubnetCIDR
+      TemplateURL:  vpc.yaml
+  #================================================================================
+  # AWS NETWORK FIREWALL
+  #================================================================================

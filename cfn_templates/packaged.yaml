@@ -1,0 +1,66 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: This template creates the infrastructure required to implement and test
+  SageMaker Studio VPC Mode. It creates a VPC, Subnet, VPC Endpoints, VPC Policies,
+  and IAM Execution Roles. **WARNING** This template creates AWS Resources in your
+  account. You will be billed for the AWS resources used if you create a stack from
+  this template.
+Parameters:
+  ProjectName:
+    Type: String
+    Default: sagemaker-studio-vpc
+  VpcCIDR:
+    Type: String
+    Default: 10.2.0.0/16
+  FirewallSubnetCIDR:
+    Type: String
+    Default: 10.2.1.0/24
+  NATGatewaySubnetCIDR:
+    Type: String
+    Default: 10.2.2.0/24
+  SageMakerStudioSubnetCIDR:
+    Type: String
+    Default: 10.2.3.0/24
+Resources:
+  IAM:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: S3
+    Properties:
+      Parameters:
+        ProjectName:
+          Ref: ProjectName
+        DataBucket:
+          Fn::GetAtt:
+          - S3
+          - Outputs.DataBucket
+        ModelBucket:
+          Fn::GetAtt:
+          - S3
+          - Outputs.ModelBucket
+      TemplateURL: https://s3.eu-west-1.amazonaws.com/ilyiny-sagemaker-demo-artefacts/8f869043c3df0583065e196e839ff8cd.template
+  S3:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: VPC
+    Properties:
+      Parameters:
+        ProjectName:
+          Ref: ProjectName
+        DataBucketName:
+          Fn::Sub: ${ProjectName}-data
+        ModelBucketName:
+          Fn::Sub: ${ProjectName}-models
+      TemplateURL: https://s3.eu-west-1.amazonaws.com/ilyiny-sagemaker-demo-artefacts/719b9e758a700c435b11b1c2e258e733.template
+  VPC:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      Parameters:
+        ProjectName:
+          Ref: ProjectName
+        VpcCIDR:
+          Ref: VpcCIDR
+        FirewallSubnetCIDR:
+          Ref: FirewallSubnetCIDR
+        NATGatewaySubnetCIDR:
+          Ref: NATGatewaySubnetCIDR
+        SageMakerStudioSubnetCIDR:
+          Ref: SageMakerStudioSubnetCIDR
+      TemplateURL: https://s3.eu-west-1.amazonaws.com/ilyiny-sagemaker-demo-artefacts/93006f3ad472185ca584409d3e20b5e6.template
