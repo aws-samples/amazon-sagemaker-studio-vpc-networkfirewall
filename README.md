@@ -277,7 +277,7 @@ To deploy the stack into the current account and region please complete the foll
 make deploy
 ```
 
-**Temporary fix**: 
+Follow with a **temporary fix**: 
 1. Add the route to the Firewall VPC endpoint to the Internet Gateway route table:
 ```bash
 DEST_CIDR=10.2.2.0/24
@@ -348,19 +348,57 @@ Use the generated pre-signed URL to connect to Amazon SageMaker Studio
 # Demo
 Start the Amazon SageMaker Studio from the pre-signed URL or AWS SageMaker console.
 
-## Infrastructure walk-through
+## Infrastructure walkthrough
 - VPC setup
 - Subnets
+- Network devices (NAT Gateway, Network Firewall) and the route tables
 - Security groups
-- S3 VPC endpoint setup with endpoint policy 
-- S3 bucket setup with bucket policy. Demostrate there is no AWS console access to the solution buckets (`data` and `models`)
+- S3 VPC endpoint setup with the endpoint policy 
+- S3 VPC interface endpoints for AWS public services
+- S3 bucket setup with the bucket policy. Demostrate there is no AWS console access to the solution buckets (`data` and `models`)
 
 ## S3 access 
+- open a notebook in SageMaker Studio.
+- create a file 
+- copy file to `data` S3 bucket
+```
+!aws s3 cp test-file.txt s3://<project-name>_data
+```
+- the operation must be successful
+
+- try to copy the file or list any other bucket: AccessDenied error
+- try to list the `<project-name>_data` bucket from a command line: AccessDenied error
 
 ## Internet access
+Here we show how the internet inbound or outbound access can be controled with AWS Network Firewall.
+
+The solution deploys an empty network firewall policy. This policy is attached to the network firewall.
+All inbound and outbound internet traffic is allowed now.
+
+- go to the SageMaker Studio notebook and try to clone any public github repository:
+```
+!git clone <https-path connection string>
+```
+- the operation must be successful
+- go to Firewall Polices in AWS VPC console and add a new stateful rule group. Specify 'Domain list` as rule group type.
+- add `.github.com` to Domain list field. Select `Deny` action as Action 
+
+![Firewall policy rule group](design/firewall-policy-rule-group-setup.png)
+
+Now the domain name `.github.com` is on the deny-list. Any inbound our outbound traffic from this domain will be dropped.
+
+- now try to clone any github repository in the notebook instance:
+```
+!git clone <https-path connection string>
+```
+- the operation will timeout this time - the access to the `.github.com` domain is blocked by the network firewall
+
+You can demostrate any other stateless or stateful rules and implement traffic filtering based on a classical 5-tuple (protocol, source IP, source port, destination IP, destination port) by creating and enabling new firewall policy rule groups.
+
+You can also demostrate the usage of the SageMaker security group or NACL inbould and outbound rules. 
 
 # Clean up
-
+TBD
 
 # Resources
 [1]. [SageMaker Security](https://docs.aws.amazon.com/sagemaker/latest/dg/security.html)  
