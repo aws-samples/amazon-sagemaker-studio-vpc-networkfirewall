@@ -60,7 +60,9 @@ Resources:
               - s3:ListBucket
             Resource:
               - !Sub arn:aws:s3:::${DataBucket}/*
+              - !Sub arn:aws:s3:::${DataBucket}
               - !Sub arn:aws:s3:::${ModelBucket}/*
+              - !Sub arn:aws:s3:::${ModelBucket}
           - Sid: ECRAccess
             Effect: Allow
             Action:
@@ -134,6 +136,7 @@ Resources:
       RoleName: !Sub ${ProjectName}-notebook-role
       ManagedPolicyArns:
         - !Ref SageMakerNotebookInstancePolicy
+        - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess
 
 
 

@@ -124,15 +124,12 @@ aws ec2 create-route \
   
 ### Create an Amazon SageMaker Studio domain inside a VPC
 ```bash
-# Please replace the variable below according to your environment
-REGION=eu-west-1 # AWS Region where the Domain will be created
-VPC_DOMAIN_NAME= # Select a name for your Domain
-
-# The values below can be obtained on the "Output" section of the CloudFormation used on the previous step
-VPC_ID=
-SAGEMAKER_STUDIO_SUBNET_IDS=
-SAGEMAKER_SECURITY_GROUP=
-EXECUTION_ROLE_ARN=
+REGION=eu-west-1
+VPC_DOMAIN_NAME=ilyiny-sagemaker-studio-domain
+VPC_ID=vpc-0877dce707733edc8
+SAGEMAKER_STUDIO_SUBNET_IDS=subnet-0b13cec34bf66034d
+SAGEMAKER_SECURITY_GROUP=sg-0cb279653b4b13240
+EXECUTION_ROLE_ARN=arn:aws:iam::906545278380:role/sagemaker-studio-vpc-notebook-role
 
 aws sagemaker create-domain \
     --region $REGION \
@@ -142,10 +139,19 @@ aws sagemaker create-domain \
     --app-network-access-type VpcOnly \
     --auth-mode IAM \
     --default-user-settings "ExecutionRole=${EXECUTION_ROLE_ARN},SecurityGroups=${SAGEMAKER_SECURITY_GROUP}"
-
-#Please note the DomainArn output - we will use it on the next step
 ```
+```
+"DomainArn": "arn:aws:sagemaker:eu-west-1:906545278380:domain/d-ktlfey9wdfub"
+```
+```bash
+DOMAIN_ID=d-ktlfey9wdfub 
+USER_PROFILE_NAME=ilyiny-sm-studio
 
+aws sagemaker create-user-profile \
+    --region $REGION \
+    --domain-id $DOMAIN_ID \
+    --user-profile-name $USER_PROFILE_NAME
+```
 
 # SageMaker security
  
