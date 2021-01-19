@@ -138,6 +138,6 @@ Outputs:
     Value: !Ref DataBucket
   ModelBucket:
     Value: !Ref ModelBucket
-  KMSCMK:
+  KMSKeyArn:
     Description: KMS Key ARN for the S3 buckets
     Value: !GetAtt KMSCMK.Arn

@@ -23,13 +23,16 @@ NAT_GW_SN_CIDR ?= 10.2.2.0/24
 SAGEMAKER_SN_CIDR ?= 10.2.3.0/24
 
 
-# Stack name used when deploying the app for manual testing
+# Stack name used when deploying or deleting the stack
 APP_STACK_NAME ?= sagemaker-studio-demo
 
 PYTHON := $(shell /usr/bin/which python$(PY_VERSION))
 
 .DEFAULT_GOAL := package
 
+delete:
+	aws cloudformation delete-stack \
+		--stack-name $(APP_STACK_NAME)
 build:
 
 package: build 

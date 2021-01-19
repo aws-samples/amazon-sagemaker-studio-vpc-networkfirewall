@@ -36,7 +36,7 @@ Resources:
           Fn::GetAtt:
           - S3
           - Outputs.ModelBucket
-      TemplateURL: https://s3.eu-west-1.amazonaws.com/ilyiny-sagemaker-demo-artefacts/8f869043c3df0583065e196e839ff8cd.template
+      TemplateURL: https://s3.eu-central-1.amazonaws.com/ilyiny-sagemaker-demo-artefacts/57c275518cd27f0c6a229f6d6431fe2b.template
   S3:
     Type: AWS::CloudFormation::Stack
     DependsOn: VPC
@@ -45,10 +45,14 @@ Resources:
         ProjectName:
           Ref: ProjectName
         DataBucketName:
-          Fn::Sub: ${ProjectName}-data
+          Fn::GetAtt:
+          - VPC
+          - Outputs.DataBucket
         ModelBucketName:
-          Fn::Sub: ${ProjectName}-models
-      TemplateURL: https://s3.eu-west-1.amazonaws.com/ilyiny-sagemaker-demo-artefacts/719b9e758a700c435b11b1c2e258e733.template
+          Fn::GetAtt:
+          - VPC
+          - Outputs.ModelBucket
+      TemplateURL: https://s3.eu-central-1.amazonaws.com/ilyiny-sagemaker-demo-artefacts/c30fb1e65c276aacdec6edf90cff7ff3.template
   VPC:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -63,4 +67,57 @@ Resources:
           Ref: NATGatewaySubnetCIDR
         SageMakerStudioSubnetCIDR:
           Ref: SageMakerStudioSubnetCIDR
-      TemplateURL: https://s3.eu-west-1.amazonaws.com/ilyiny-sagemaker-demo-artefacts/93006f3ad472185ca584409d3e20b5e6.template
+        DataBucketName:
+          Fn::Sub: ${ProjectName}-${AWS::Region}-data
+        ModelBucketName:
+          Fn::Sub: ${ProjectName}-${AWS::Region}-models
+      TemplateURL: https://s3.eu-central-1.amazonaws.com/ilyiny-sagemaker-demo-artefacts/473d5d7e0d9951d321817f7ce88f65d1.template
+Outputs:
+  VPCId:
+    Description: The ID of VPC where SageMaker Studio will reside
+    Value:
+      Fn::GetAtt:
+      - VPC
+      - Outputs.VPCId
+  SageMakerStudioSubnetId:
+    Description: The ID of the SageMaker subnet
+    Value:
+      Fn::GetAtt:
+      - VPC
+      - Outputs.SageMakerStudioSubnetId
+  SageMakerStudioSecurityGroupId:
+    Description: The ID the SageMaker security group
+    Value:
+      Fn::GetAtt:
+      - VPC
+      - Outputs.SageMakerSecurityGroupId
+  SageMakerExecutionRoleArn:
+    Description: IAM Execution role for SageMaker Studio and SageMaker notebooks
+    Value:
+      Fn::GetAtt:
+      - IAM
+      - Outputs.ExecutionRoleArn
+  KMSCMKEBSArn:
+    Description: KMS CMK arn for SageMaker notebooks EBS encryption
+    Value:
+      Fn::GetAtt:
+      - IAM
+      - Outputs.KMSKeyArn
+  KMSCMKS3bucketsArn:
+    Description: KMS CMK arn for data encryption in S3 buckets
+    Value:
+      Fn::GetAtt:
+      - S3
+      - Outputs.KMSKeyArn
+  SageMakerS3bucketData:
+    Description: Name of S3 bucket for data
+    Value:
+      Fn::GetAtt:
+      - S3
+      - Outputs.DataBucket
+  SageMakerS3bucketModels:
+    Description: Name of S3 bucket for models
+    Value:
+      Fn::GetAtt:
+      - S3
+      - Outputs.ModelBucket

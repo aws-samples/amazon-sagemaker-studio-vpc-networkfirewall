@@ -179,10 +179,9 @@ Resources:
       AliasName: !Sub alias/${KMSAlias}
       TargetKeyId: !Ref KMSKey  
 
-
 Outputs:
-  ExecutionRoleARN:
+  ExecutionRoleArn:
     Value: !GetAtt SageMakerNotebookInstanceRole.Arn
   KMSKeyArn:
-    Description: AMS KMS CMK for sagemaker Notebook's EBS encryption
+    Description: KMS CMK arn for SageMaker notebooks EBS encryption
     Value: !GetAtt KMSKey.Arn

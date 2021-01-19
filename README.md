@@ -15,8 +15,6 @@ All these specific requirements are covered in the solution.
 # SageMaker security
 You can apply all the same security and compliance approaches and best practices (authentication, authorization, VPC, network isolation, control and monitoring) as a consistent set of Amazon security features to Amazon SageMaker workloads and Amazon SageMaker Studio specifically. 
  
-## SageMaker-related approaches for security, access control and restriction
-
 ## Network isolation
 Common approaches for network isolation can also be applied to SageMaker workloads:
 - you can enable [network isolation](https://docs.aws.amazon.com/vpc/index.html): Containers that run with network isolation cannot make any outbound network calls.
@@ -136,6 +134,10 @@ For more information, see [11].
 ### Without VPC
 All the traffic goes through the Elastic Network Interface (ENI) attached to the managed EC2 instance, which is running in Amazon SageMaker managed VPC.
 
+![Notebook instance without VPC](design/notebook-instance-without-vpc.png)
+
+All traffic goes via the ENI within an Amazon SageMaker managed VPC.
+
 ### Private attached VPC with direct internet access
 2 ENI attached to the managed EC2 instance:
 
@@ -235,8 +237,8 @@ The solution deploys the following resources:
 
 ## S3 resources
 The solution deploys two Amazon S3 buckets: 
-- `<project_name>-data`  
-- `<project_name>-models`
+- `<project_name>-<region>-data`  
+- `<project_name>-<region>-models`
 
 Both buckets have a bucket policy attached. The bucket policy explicitly denies all access to the bucket which does not come from the designated VPC endpoint.
 The Amazon S3 VPC endpoint has also a policy attached to it. This policy allows access the the two S3 buckets (`model` and `data`) only.
@@ -279,30 +281,30 @@ make deploy
 
 Follow with a **temporary fix**: 
 1. Add the route to the Firewall VPC endpoint to the Internet Gateway route table:
+Please replace the variables with corresponding values from `VPC` CloudFormation stack output.
 ```bash
-DEST_CIDR=10.2.2.0/24
-FIREWALL_VPCE=vpce-0df2998d6ec900ccc
-IGW_RTB=rtb-097a3cafaa421ddcc
+NAT_SN_CIDR= # NATGWSubnetCIDR
+FIREWALL_VPCE= # Endpoint from the NetworkFirewallEndpointIds list correspoinding to the Firewall subnet
+IGW_RTB= # IGWRouteTableId
 
 aws ec2 create-route \
-    --destination-cidr-block ${DEST_CIDR} \
+    --destination-cidr-block ${NAT_SN_CIDR} \
     --vpc-endpoint-id ${FIREWALL_VPCE} \
     --route-table-id ${IGW_RTB}
 ```
 
 2. Add the route to the Firewall VPC endpoint to the NAT Gateway route table:
 ```bash
-DEST_CIDR=0.0.0.0/0
-FIREWALL_VPCE=vpce-0df2998d6ec900ccc
-NATGW_RTB=rtb-0d226d36fc7cdd662
+NATGW_RTB= # NATGWRouteTableId
 
 aws ec2 create-route \
-    --destination-cidr-block ${DEST_CIDR} \
+    --destination-cidr-block 0.0.0.0/0 \
     --vpc-endpoint-id ${FIREWALL_VPCE} \
     --route-table-id ${NATGW_RTB}
 ```
   
 ### Create an Amazon SageMaker Studio domain inside a VPC
+Please replace the variables with corresponding values from `sagemaker-studio-vpc` CloudFormation stack output.
 ```bash
 REGION=eu-west-1
 VPC_DOMAIN_NAME=ilyiny-sagemaker-studio-domain
@@ -362,12 +364,12 @@ Start the Amazon SageMaker Studio from the pre-signed URL or AWS SageMaker conso
 - create a file 
 - copy file to `data` S3 bucket
 ```
-!aws s3 cp test-file.txt s3://<project-name>_data
+!aws s3 cp test-file.txt s3://<project_name>-<region>-data
 ```
 - the operation must be successful
 
 - try to copy the file or list any other bucket: AccessDenied error
-- try to list the `<project-name>_data` bucket from a command line: AccessDenied error
+- try to list the `<project_name>-<region>-data` bucket from a command line: AccessDenied error
 
 ## Internet access
 Here we show how the internet inbound or outbound access can be controled with AWS Network Firewall.
@@ -398,7 +400,12 @@ You can demostrate any other stateless or stateful rules and implement traffic f
 You can also demostrate the usage of the SageMaker security group or NACL inbould and outbound rules. 
 
 # Clean up
-TBD
+1. [Delete Amazon SageMaker Studio Domain](https://docs.aws.amazon.com/sagemaker/latest/dg/gs-studio-delete-domain.html)
+2. Delete the stack:
+```bash
+make delete
+```
+alternatively you can delete the stack from the AWS CloudFormation console.
 
 # Resources
 [1]. [SageMaker Security](https://docs.aws.amazon.com/sagemaker/latest/dg/security.html)  
