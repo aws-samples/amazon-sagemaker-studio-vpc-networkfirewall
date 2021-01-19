@@ -138,8 +138,6 @@ Resources:
         - !Ref SageMakerNotebookInstancePolicy
         - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess
 
-
-
   KMSKey:
     Type: AWS::KMS::Key
     Properties:
