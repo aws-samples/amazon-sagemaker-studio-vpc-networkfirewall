@@ -232,8 +232,8 @@ The solution deploys the following resources:
     - VPC endpoints security group
 - Proper security group inbound rules
 - 4x route tables for network routing and proper routes
-- S3 VPC endpoint (type Gateway)
-- AWS service-access VPC endpoints (type Interface) for various AWS services
+- S3 VPC endpoint (type `Gateway`)
+- AWS service-access VPC endpoints (type `Interface`) for various AWS services
 
 ## S3 resources
 The solution deploys two Amazon S3 buckets: 
@@ -252,21 +252,32 @@ Two AWS KMS customer keys are deployed by the solution:
 
 The solution also creates and deploys the IAM execution role for SageMaker notebooks and SageMaker Studio with pre-configured IAM policies.
 
+## SageMaker resources
+The solution creates:
+- SageMaker Domain
+- SageMaker User Profile
+
 # Deployment
 
 ## Prerequisites
 - An AWS Account
 - An IAM user or role with administrative access
 - configured `aws cli` with that IAM user or role credentials
+- An Amazon S3 bucket in your account in the same region where you deploy the solution
+
+❗ For CloudFormation template deployment you must use the S3 bucket in the same region as you deployment region.
+If you need to deploy the solution in different region, you need to create a bucket per region and specify the bucket name in the `make deploy` call.
 
 ## CloudFormation stack parameters
 - `ProjectName`: **OPTONAL**. Default is `sagemaker-studio-vpc`
+- `DomainName`: **OPTIONAL**: SageMaker domain name. Default is `sagemaker-domain-<region>`  
+- `UserProfileName`: **OPTIONAL**: User profile name for the SageMaker domain. Default is `demouser-profile-<region>`
 - `VpcCIDR`: **OPTONAL**. Default is 10.2.0.0/16
 - `FirewallSubnetCIDR`: **OPTONAL**. Default is 10.2.1.0/24
 - `NATGatewaySubnetCIDR`: **OPTONAL**. Default is 10.2.2.0/24
 - `SageMakerStudioSubnetCIDR`: **OPTONAL**. Default is 10.2.3.0/24
 
-You can change the stack parameters in the `Makefile`.
+You can change the stack parameters in the `Makefile` or pass them as variable assignments as part of `make` call.
 
 ❗ Please make sure that default or your custom CIDRs do not conflict with any existing VPC in the account and the region where you are deploying the CloudFormation stack
 
@@ -276,42 +287,126 @@ To deploy the stack into the current account and region please complete the foll
 
 ### Deploy CloudFormation stack
 ```bash
-make deploy
+make deploy CFN_ARTEFACT_S3_BUCKET=<your s3 bucket name>
 ```
 
-Follow with a **temporary fix**: 
-1. Add the route to the Firewall VPC endpoint to the Internet Gateway route table:
-Please replace the variables with corresponding values from `VPC` CloudFormation stack output.
+The stack will deploy all needed resources like VPC, network devices, security groups, S3 buckets, IAM policies, VPC endpoints and also create a SageMaker studio domain, and a new user profile.
+
+You can now launch the Amazon SageMaker Studio from the SageMaker console or generate a pre-signed URL and launch the Studio from the browser:
 ```bash
-NAT_SN_CIDR= # NATGWSubnetCIDR
-FIREWALL_VPCE= # Endpoint from the NetworkFirewallEndpointIds list correspoinding to the Firewall subnet
-IGW_RTB= # IGWRouteTableId
+DOMAIN_ID = # DomainId from the stack output
+USER_PROFILE_NAME = # UserProfileName from the stack output
 
-aws ec2 create-route \
-    --destination-cidr-block ${NAT_SN_CIDR} \
-    --vpc-endpoint-id ${FIREWALL_VPCE} \
-    --route-table-id ${IGW_RTB}
+aws sagemaker create-presigned-domain-url \
+    --domain-id $DOMAIN_ID \
+    --user-profile-name $USER_PROFILE_NAME
 ```
 
-2. Add the route to the Firewall VPC endpoint to the NAT Gateway route table:
+To see the full list of stack output values you can run the following command in a terminal:
 ```bash
-NATGW_RTB= # NATGWRouteTableId
-
-aws ec2 create-route \
-    --destination-cidr-block 0.0.0.0/0 \
-    --vpc-endpoint-id ${FIREWALL_VPCE} \
-    --route-table-id ${NATGW_RTB}
+aws cloudformation describe-stacks \
+    --stack-name sagemaker-studio-demo \
+    --output text \
+    --query "Stacks[0].Outputs[*].[OutputKey, OutputValue]"
 ```
-  
+
+# Demo
+Start the Amazon SageMaker Studio from the pre-signed URL or via the AWS SageMaker console.
+
+## Infrastructure walkthrough
+- VPC setup
+- Subnets
+- Network devices (NAT Gateway, Network Firewall) and the route tables
+- Security groups
+- S3 VPC endpoint setup with the endpoint policy 
+- S3 VPC interface endpoints for AWS public services
+- S3 bucket setup with the bucket policy. Demostrate there is no AWS console access to the solution buckets (`data` and `models`)
+- (optional) Network Firewall routing setup 
+
+## S3 access 
+- open a notebook in SageMaker Studio.
+- create a file 
+- copy file to `data` S3 bucket
+```
+!aws s3 cp test-file.txt s3://<project_name>-<region>-data
+```
+- the operation must be successful
+
+- try to copy the file or list any other bucket: AccessDenied error
+- try to list the `<project_name>-<region>-data` bucket from a command line: AccessDenied error
+
+SageMaker Studio has access to only the designated buckets (`models` and `data`). You will not be able to use [SageMaker JumpStart](https://docs.aws.amazon.com/sagemaker/latest/dg/studio-jumpstart.html) or any other SageMaker Studio functionality which requires access to other Amazon S3 buckets. To enable access to other S3 buckets you have to change the S3 VPC endpoint policy.
+
+## Internet access
+Here we show how the internet inbound or outbound access can be controled with AWS Network Firewall.
+
+The solution deploys a network firewall policy with a stateful rule group with a deny domain list. This policy is attached to the network firewall.
+All inbound and outbound internet traffic is allowed now, except for `.kaggle.com` domain, which is on the deny list.
+
+Now we restrict access to another domain name:
+
+- go to the SageMaker Studio notebook and try to clone any public github repository:
+```
+!git clone <https-path connection string>
+```
+- the operation must be successful
+- go to Firewall Polices in AWS VPC console and select `network-firewall-policy-<ProjectName>` policy. Edit the `domain-deny-<ProjectName>` stateful rule group and add `.github.com` to Domain list field. 
+
+![Firewall policy rule group](design/firewall-policy-rule-group-setup.png)
+
+Now the domain name `.github.com` is on the deny-list. Any inbound our outbound traffic from this domain will be dropped.
+
+- now try to clone any github repository in the notebook instance:
+```
+!git clone <https-path connection string>
+```
+- the operation will timeout this time - the access to the `.github.com` domain is blocked by the network firewall
+
+You can demostrate any other stateless or stateful rules and implement traffic filtering based on a classical 5-tuple (protocol, source IP, source port, destination IP, destination port) by creating and enabling new firewall policy rule groups.
+
+You can also demostrate the usage of the SageMaker security group or NACL inbould and outbound rules. 
+
+# Clean up
+Delete the stack:
+```bash
+make delete
+```
+
+Alternatively you can delete the stack from the AWS CloudFormation console.
+
+If the deletion of the SageMaker domain fails, try to delete running applications for the user profile as described in [Delete Amazon SageMaker Studio Domain](https://docs.aws.amazon.com/sagemaker/latest/dg/gs-studio-delete-domain.html)
+
+# Resources
+[1]. [SageMaker Security](https://docs.aws.amazon.com/sagemaker/latest/dg/security.html)  
+[2]. [SageMaker Infrastructure Security](https://docs.aws.amazon.com/sagemaker/latest/dg/infrastructure-security.html)  
+[3]. I took the initial version of the CloudFormation templates for deployment of VPC, Subnets and S3 buckets from this [GitHub repository](https://github.com/aws-samples/amazon-sagemaker-studio-vpc-blog)  
+[4]. Blog post for the repository: [Securing Amazon SageMaker Studio connectivity using a private VPC](https://aws.amazon.com/blogs/machine-learning/securing-amazon-sagemaker-studio-connectivity-using-a-private-vpc/)  
+[5]. [Secure deployment of Amazon SageMaker resources](https://aws.amazon.com/blogs/security/secure-deployment-of-amazon-sagemaker-resources/)  
+[6]. Security-focused workshop [Amazon SageMaker Workshop: Building Secure Environments](https://sagemaker-workshop.com/security_for_sysops.html)  
+[7]. [Amazon SageMaker Identity-Based Policy Examples](https://docs.aws.amazon.com/sagemaker/latest/dg/security_iam_id-based-policy-examples.html)  
+[8]. [Deployment models for AWS Network Firewall](https://aws.amazon.com/blogs/networking-and-content-delivery/deployment-models-for-aws-network-firewall/)  
+[9]. [VPC Ingress Routing – Simplifying Integration of Third-Party Appliances](https://aws.amazon.com/blogs/aws/new-vpc-ingress-routing-simplifying-integration-of-third-party-appliances/)  
+[10]. [Host SageMaker workloads in a private VPC](https://docs.aws.amazon.com/sagemaker/latest/dg/host-vpc.html)  
+[11]. [Understanding Amazon SageMaker notebook instance networking configurations and advanced routing options](https://aws.amazon.com/blogs/machine-learning/understanding-amazon-sagemaker-notebook-instance-networking-configurations-and-advanced-routing-options/)  
+[12]. [Create Amazon SageMaker Studio using AWS CloudFormation](https://aws.amazon.com/blogs/machine-learning/creating-amazon-sagemaker-studio-domains-and-user-profiles-using-aws-cloudformation/)
+
+# Internal AWS resources
+- [AWS Network Firewall CloudFormation templates](https://gitlab.aws.dev/shkahma/anfw-templates)  
+- [Discussion how to deploy AWS Network Firewall with CloudFormation](https://answers.amazon.com/questions/176301#176315)  
+
+# Appendix
+
+## aws cli commands to setup and launch Amazon SageMaker Studio
+
 ### Create an Amazon SageMaker Studio domain inside a VPC
-Please replace the variables with corresponding values from `sagemaker-studio-vpc` CloudFormation stack output.
+Please replace the variables with corresponding values from `sagemaker-studio-vpc` CloudFormation stack output (reference only, the stack creates the domain and the user profile).
 ```bash
-REGION=eu-west-1
-VPC_DOMAIN_NAME=ilyiny-sagemaker-studio-domain
-VPC_ID=vpc-0877dce707733edc8
-SAGEMAKER_STUDIO_SUBNET_IDS=subnet-0b13cec34bf66034d
-SAGEMAKER_SECURITY_GROUP=sg-0cb279653b4b13240
-EXECUTION_ROLE_ARN=arn:aws:iam::ACCOUNT_ID:role/sagemaker-studio-vpc-notebook-role
+REGION=
+VPC_DOMAIN_NAME=
+VPC_ID=
+SAGEMAKER_STUDIO_SUBNET_IDS=
+SAGEMAKER_SECURITY_GROUP=
+EXECUTION_ROLE_ARN=
 
 aws sagemaker create-domain \
     --region $REGION \
@@ -328,8 +423,8 @@ Note the `domain id` from the `DomainArm` returned by the previous call:
 
 ### Create a user profile
 ```bash
-DOMAIN_ID=d-ktlfey9wdfub 
-USER_PROFILE_NAME=ilyiny-sm-studio
+DOMAIN_ID=
+USER_PROFILE_NAME=
 
 aws sagemaker create-user-profile \
     --region $REGION \
@@ -347,75 +442,5 @@ aws sagemaker create-presigned-domain-url \
 
 Use the generated pre-signed URL to connect to Amazon SageMaker Studio
 
-# Demo
-Start the Amazon SageMaker Studio from the pre-signed URL or AWS SageMaker console.
-
-## Infrastructure walkthrough
-- VPC setup
-- Subnets
-- Network devices (NAT Gateway, Network Firewall) and the route tables
-- Security groups
-- S3 VPC endpoint setup with the endpoint policy 
-- S3 VPC interface endpoints for AWS public services
-- S3 bucket setup with the bucket policy. Demostrate there is no AWS console access to the solution buckets (`data` and `models`)
-
-## S3 access 
-- open a notebook in SageMaker Studio.
-- create a file 
-- copy file to `data` S3 bucket
-```
-!aws s3 cp test-file.txt s3://<project_name>-<region>-data
-```
-- the operation must be successful
-
-- try to copy the file or list any other bucket: AccessDenied error
-- try to list the `<project_name>-<region>-data` bucket from a command line: AccessDenied error
-
-## Internet access
-Here we show how the internet inbound or outbound access can be controled with AWS Network Firewall.
-
-The solution deploys an empty network firewall policy. This policy is attached to the network firewall.
-All inbound and outbound internet traffic is allowed now.
-
-- go to the SageMaker Studio notebook and try to clone any public github repository:
-```
-!git clone <https-path connection string>
-```
-- the operation must be successful
-- go to Firewall Polices in AWS VPC console and add a new stateful rule group. Specify 'Domain list` as rule group type.
-- add `.github.com` to Domain list field. Select `Deny` action as Action 
-
-![Firewall policy rule group](design/firewall-policy-rule-group-setup.png)
-
-Now the domain name `.github.com` is on the deny-list. Any inbound our outbound traffic from this domain will be dropped.
-
-- now try to clone any github repository in the notebook instance:
-```
-!git clone <https-path connection string>
-```
-- the operation will timeout this time - the access to the `.github.com` domain is blocked by the network firewall
-
-You can demostrate any other stateless or stateful rules and implement traffic filtering based on a classical 5-tuple (protocol, source IP, source port, destination IP, destination port) by creating and enabling new firewall policy rule groups.
-
-You can also demostrate the usage of the SageMaker security group or NACL inbould and outbound rules. 
-
-# Clean up
-1. [Delete Amazon SageMaker Studio Domain](https://docs.aws.amazon.com/sagemaker/latest/dg/gs-studio-delete-domain.html)
-2. Delete the stack:
-```bash
-make delete
-```
-alternatively you can delete the stack from the AWS CloudFormation console.
-
-# Resources
-[1]. [SageMaker Security](https://docs.aws.amazon.com/sagemaker/latest/dg/security.html)  
-[2]. [SageMaker Infrastructure Security](https://docs.aws.amazon.com/sagemaker/latest/dg/infrastructure-security.html)  
-[3]. I took the initial version of the CloudFormation templates for deployment of VPC, Subnets and S3 buckets from this [GitHub repository](https://github.com/aws-samples/amazon-sagemaker-studio-vpc-blog)  
-[4]. Blog post for the repository: [Securing Amazon SageMaker Studio connectivity using a private VPC](https://aws.amazon.com/blogs/machine-learning/securing-amazon-sagemaker-studio-connectivity-using-a-private-vpc/)  
-[5]. [Secure deployment of Amazon SageMaker resources](https://aws.amazon.com/blogs/security/secure-deployment-of-amazon-sagemaker-resources/)  
-[6]. Security-focused workshop [Amazon SageMaker Workshop: Building Secure Environments](https://sagemaker-workshop.com/security_for_sysops.html)  
-[7]. [Amazon SageMaker Identity-Based Policy Examples](https://docs.aws.amazon.com/sagemaker/latest/dg/security_iam_id-based-policy-examples.html)  
-[8]. [Deployment models for AWS Network Firewall](https://aws.amazon.com/blogs/networking-and-content-delivery/deployment-models-for-aws-network-firewall/)  
-[9]. [VPC Ingress Routing – Simplifying Integration of Third-Party Appliances](https://aws.amazon.com/blogs/aws/new-vpc-ingress-routing-simplifying-integration-of-third-party-appliances/)  
-[10]. [Host SageMaker workloads in a private VPC](https://docs.aws.amazon.com/sagemaker/latest/dg/host-vpc.html)  
-[11]. [Understanding Amazon SageMaker notebook instance networking configurations and advanced routing options](https://aws.amazon.com/blogs/machine-learning/understanding-amazon-sagemaker-notebook-instance-networking-configurations-and-advanced-routing-options/)  
+# License
+This project is licensed under the MIT-0 License. See the [LICENSE](LICENSE) file.

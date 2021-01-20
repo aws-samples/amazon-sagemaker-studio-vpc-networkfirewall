@@ -1,0 +1,367 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+
+AWSTemplateFormatVersion: 2010-09-09
+Description: Creates SageMaker Studio domain and user profile for the SageMaker Studio
+
+Parameters:
+  DomainName:
+    Type: String
+  UserProfileName:
+    Type: String
+  VpcId:
+    Type: String
+  SageMakerStudioSubnetIds:
+    Type: String
+  SageMakerSecurityGroupIds:
+    Type: String
+  SageMakerExecutionRoleArn:
+    Type: String
+  
+Resources:
+# Custom resources to create SageMaker Studio domain and user profile
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: CloudWatchLogsPermissions
+                Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "arn:${AWS::Partition}:logs:*:*:*"
+              - Sid: SageMakerDomainPermission
+                Effect: Allow
+                Action:
+                  - sagemaker:CreateDomain
+                  - sagemaker:DescribeDomain
+                  - sagemaker:DeleteDomain
+                  - sagemaker:UpdateDomain
+                  - sagemaker:CreateUserProfile
+                  - sagemaker:UpdateUserProfile
+                  - sagemaker:DeleteUserProfile
+                  - sagemaker:DescribeUserProfile
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:sagemaker:*:*:domain/*"
+                  - !Sub "arn:${AWS::Partition}:sagemaker:*:*:user-profile/*"
+              - Sid: SageMakerExecPassRole
+                Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource: !Ref SageMakerExecutionRoleArn
+
+  SageMakerDomainLambda:
+      Type: "AWS::Lambda::Function"
+      DependsOn:
+        - LambdaExecutionRole
+      Properties:
+        Code:
+          ZipFile: !Sub |
+            import time
+            import boto3
+            import logging
+            import cfnresponse
+            from botocore.exceptions import ClientError
+
+
+            sm_client = boto3.client('sagemaker')
+            logger = logging.getLogger(__name__)
+
+            SAGEMAKER_DOMAIN_AUTH_MODE = "IAM"
+            SAGEMAKER_NETWORK_ACCESS_TYPE = "VpcOnly"
+            SAGEMAKER_EFS_RETENTION_POLICY = "Delete"
+
+            def create_domain(config):
+                vpc_id = config['VpcId']
+                subnet_ids = config['SageMakerStudioSubnetIds']
+                default_user_settings = config['DefaultUserSettings']
+                domain_name = config['DomainName']
+
+                response = sm_client.create_domain(
+                    DomainName=domain_name,
+                    AuthMode=SAGEMAKER_DOMAIN_AUTH_MODE,
+                    DefaultUserSettings=default_user_settings,
+                    SubnetIds=subnet_ids.split(','),
+                    VpcId=vpc_id,
+                    AppNetworkAccessType=SAGEMAKER_NETWORK_ACCESS_TYPE
+                )
+
+                domain_id = response['DomainArn'].split('/')[-1]
+                created = False
+
+                while not created:
+                    response = sm_client.describe_domain(DomainId=domain_id)
+                    time.sleep(5)
+                    if response['Status'] == 'InService':
+                        created = True
+
+                logging.info(f"SageMaker domain created successfully: {domain_id}")
+                return response
+
+            def update_domain(domain_id, default_user_settings):
+                response = sm_client.update_domain(
+                    DomainId=domain_id,
+                    DefaultUserSettings=default_user_settings
+                )
+                updated = False
+
+                while not updated:
+                    response = sm_client.describe_domain(DomainId=domain_id)
+                    if response['Status'] == 'InService':
+                        updated = True
+                    else:
+                        logging.info(f"Updating .. {response['Status']}")
+                    time.sleep(5)
+
+                logging.info(f"SageMaker domain updated successfully")
+                return response
+
+            def delete_domain(domain_id):
+                response = sm_client.delete_domain(
+                    DomainId=domain_id,
+                    RetentionPolicy={
+                        'HomeEfsFileSystem': SAGEMAKER_EFS_RETENTION_POLICY
+                    }
+                )
+                deleted = False
+
+                while not deleted:
+                    try:
+                        sm_client.describe_domain(DomainId=domain_id)
+                    except ClientError as error:
+                        if error.response['Error']['Code'] == 'ResourceNotFound':
+                            logger.info(f"SageMaker domain {domain_id} has been deleted")
+                            deleted = True
+                            return
+                    time.sleep(5)
+
+                return response
+
+            def handle_create(event, context):
+                logger.info(f"Start creation of SageMaker Studio domain")
+                resource_config = event['ResourceProperties']
+
+                response_data = create_domain(resource_config)
+                cfnresponse.send(event, context, cfnresponse.SUCCESS,
+                                {'DomainId': response_data['DomainId']}, physicalResourceId=response_data['DomainId'])
+
+            def handle_update(event, context):
+                logging.info('Received Update event')
+                domain_id = event['PhysicalResourceId']
+                default_user_settings = event['ResourceProperties']['DefaultUserSettings']
+                update_domain(domain_id, default_user_settings)
+                cfnresponse.send(event, context, cfnresponse.SUCCESS, {'DomainId' : domain_id},
+                                physicalResourceId=event['PhysicalResourceId'])
+
+            def handle_delete(event, context):
+                logging.info('Received delete event')
+                domain_id = event['PhysicalResourceId']
+                try:
+                    sm_client.describe_domain(DomainId=domain_id)
+                except:
+                    cfnresponse.send(event, context, cfnresponse.SUCCESS,
+                                    {}, physicalResourceId=event['PhysicalResourceId'])
+                    return
+
+                delete_domain(domain_id)
+                cfnresponse.send(event, context, cfnresponse.SUCCESS, {},
+                                physicalResourceId=event['PhysicalResourceId'])
+
+            def handler(event, context):
+
+                try:
+                    if event['RequestType'] == 'Create':
+                        handle_create(event, context)
+                    elif event['RequestType'] == 'Update':
+                        handle_update(event, context)
+                    elif event['RequestType'] == 'Delete':
+                        handle_delete(event, context)
+
+                except ClientError as exception:
+                    logging.error(exception)
+                    cfnresponse.send(event, context, cfnresponse.FAILED,
+                                    {}, error=str(exception))
+        Description: Creates SageMaker domain
+        Handler: index.handler
+        MemorySize: 128
+        Role: !GetAtt LambdaExecutionRole.Arn
+        Runtime: python3.8
+        Timeout: 900
+
+  UserProfileLambda:
+      Type: "AWS::Lambda::Function"
+      DependsOn:
+        - LambdaExecutionRole
+        - SageMakerDomainLambdaInvoke
+      Properties:
+        Code:
+          ZipFile: !Sub |
+            import time
+            import boto3
+            import logging
+            import cfnresponse
+            from botocore.exceptions import ClientError
+
+            sm_client = boto3.client('sagemaker')
+            logger = logging.getLogger(__name__)
+
+            def create_user_profile(config):
+                domain_id = config['DomainId']
+                user_profile_name = config['UserProfileName']
+                user_settings = config['UserSettings']
+
+                response = sm_client.create_user_profile(
+                    DomainId=domain_id,
+                    UserProfileName=user_profile_name,
+                    UserSettings=user_settings,
+                )
+
+                created = False
+                while not created:
+                    response = sm_client.describe_user_profile(DomainId=domain_id, UserProfileName=user_profile_name)
+                    time.sleep(5)
+                    if response['Status'] == 'InService':
+                        created = True
+
+                logging.info(f"SageMaker user profile {user_profile_name} for domain {domain_id} created successfully")
+                return response
+
+            def delete_user_profile(domain_id, user_profile_name):
+                response = sm_client.delete_user_profile(
+                    DomainId=domain_id,
+                    UserProfileName=user_profile_name
+                )
+                deleted = False
+
+                while not deleted:
+                    try:
+                        sm_client.describe_user_profile(DomainId=domain_id, UserProfileName=user_profile_name)
+                    except ClientError as error:
+                        if error.response['Error']['Code'] == 'ResourceNotFound':
+                            logger.info('Deleted')
+                            deleted = True
+                            return
+                    time.sleep(5)
+
+                return response
+
+            def update_user_profile(domain_id, user_profile_name, user_settings):
+                response = sm_client.update_user_profile(
+                    DomainId=domain_id,
+                    UserProfileName=user_profile_name,
+                    UserSettings=user_settings
+                )
+                updated = False
+                while not updated:
+                    response = sm_client.describe_user_profile(DomainId=domain_id,UserProfileName=user_profile_name)
+                    if response['Status'] == 'InService':
+                        updated = True
+                    else:
+                        logging.info('Updating .. %s', response['Status'])
+                    time.sleep(5)
+
+                return response
+
+            def handle_create(event, context):
+
+                resource_config = event['ResourceProperties']
+
+                response_data = create_user_profile(resource_config)
+                cfnresponse.send(event, context, cfnresponse.SUCCESS,
+                                {'UserProfileName': response_data['UserProfileName']}, physicalResourceId=response_data['UserProfileName'])
+
+            def handle_delete(event, context):
+
+                user_profile_name = event['PhysicalResourceId']
+                domain_id = event['ResourceProperties']['DomainId']
+
+                try:
+                    sm_client.describe_user_profile(DomainId=domain_id, UserProfileName=user_profile_name)
+                except:
+                    cfnresponse.send(event, context, cfnresponse.SUCCESS,
+                                    {}, physicalResourceId=event['PhysicalResourceId'])
+                    return
+
+                delete_user_profile(domain_id, user_profile_name)
+                cfnresponse.send(event, context, cfnresponse.SUCCESS, {},
+                                physicalResourceId=event['PhysicalResourceId'])
+
+            def handle_update(event, context):
+
+                user_profile_name = event['PhysicalResourceId']
+                domain_id = event['ResourceProperties']['DomainId']
+                user_settings = event['ResourceProperties']['UserSettings']
+
+                update_user_profile(domain_id, user_profile_name, user_settings)
+
+                cfnresponse.send(event, context, cfnresponse.SUCCESS, {},
+                                physicalResourceId=event['PhysicalResourceId'])
+
+            def handler(event, context):
+                if event['RequestType']:
+
+                  logging.info('Received event:' + event['RequestType'])
+                  try:
+                      if event['RequestType'] == 'Create':
+                          handle_create(event, context)
+                      elif event['RequestType'] == 'Update':
+                          handle_update(event, context)
+                      elif event['RequestType'] == 'Delete':
+                          handle_delete(event, context)
+                  except ClientError as exception:
+                      logging.error(exception)
+                      cfnresponse.send(event, context, cfnresponse.FAILED,
+                                      {}, error=str(exception))
+
+        Description: Creates SageMaker user profile
+        Handler: index.handler
+        MemorySize: 128
+        Role: !GetAtt LambdaExecutionRole.Arn
+        Runtime: python3.8
+        Timeout: 900
+
+  SageMakerDomainLambdaInvoke:
+    Type: Custom::LambdaInvoke
+    DependsOn:
+      - SageMakerDomainLambda
+    Properties:
+      ServiceToken: !GetAtt SageMakerDomainLambda.Arn
+      DomainName: !Ref DomainName
+      VpcId: !Ref VpcId
+      SageMakerStudioSubnetIds: !Ref SageMakerStudioSubnetIds
+      DefaultUserSettings:
+        SecurityGroups: 
+          - !Ref SageMakerSecurityGroupIds
+        ExecutionRole: !Ref SageMakerExecutionRoleArn
+  
+  UserProfileLambdaInvoke:
+    Type: Custom::LambdaInvoke
+    DependsOn:
+      - UserProfileLambda
+    Properties:
+      ServiceToken: !GetAtt UserProfileLambda.Arn
+      UserProfileName: !Ref UserProfileName
+      DomainId: !GetAtt SageMakerDomainLambdaInvoke.DomainId
+      UserSettings:
+        ExecutionRole: !Ref SageMakerExecutionRoleArn
+
+Outputs:
+  SageMakerStudioDomainId:
+    Description: SageMaker Studio domain id
+    Value: !GetAtt SageMakerDomainLambdaInvoke.DomainId

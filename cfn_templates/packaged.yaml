@@ -8,6 +8,16 @@ Parameters:
   ProjectName:
     Type: String
     Default: sagemaker-studio-vpc
+  DomainName:
+    Description: SageMaker domain name
+    Type: String
+    Default:
+      Fn::Sub: sagemaker-domain-${AWS::Region}
+  UserProfileName:
+    Description: User profile name for the SageMaker domain
+    Type: String
+    Default:
+      Fn::Sub: demouser-profile-${AWS::Region}
   VpcCIDR:
     Type: String
     Default: 10.2.0.0/16
@@ -28,15 +38,15 @@ Resources:
       Parameters:
         ProjectName:
           Ref: ProjectName
-        DataBucket:
+        DataBucketName:
           Fn::GetAtt:
           - S3
-          - Outputs.DataBucket
-        ModelBucket:
+          - Outputs.DataBucketName
+        ModelBucketName:
           Fn::GetAtt:
           - S3
-          - Outputs.ModelBucket
-      TemplateURL: https://s3.eu-central-1.amazonaws.com/ilyiny-sagemaker-demo-artefacts/57c275518cd27f0c6a229f6d6431fe2b.template
+          - Outputs.ModelBucketName
+      TemplateURL: https://s3.eu-west-1.amazonaws.com/ilyiny-sagemaker-demo-artefacts/3c3445cd49c64d342dbb06e35901e81b.template
   S3:
     Type: AWS::CloudFormation::Stack
     DependsOn: VPC
@@ -47,12 +57,12 @@ Resources:
         DataBucketName:
           Fn::GetAtt:
           - VPC
-          - Outputs.DataBucket
+          - Outputs.DataBucketName
         ModelBucketName:
           Fn::GetAtt:
           - VPC
-          - Outputs.ModelBucket
-      TemplateURL: https://s3.eu-central-1.amazonaws.com/ilyiny-sagemaker-demo-artefacts/c30fb1e65c276aacdec6edf90cff7ff3.template
+          - Outputs.ModelBucketName
+      TemplateURL: https://s3.eu-west-1.amazonaws.com/ilyiny-sagemaker-demo-artefacts/56115a0619e778bdc0fa99c260aa02a7.template
   VPC:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -71,7 +81,33 @@ Resources:
           Fn::Sub: ${ProjectName}-${AWS::Region}-data
         ModelBucketName:
           Fn::Sub: ${ProjectName}-${AWS::Region}-models
-      TemplateURL: https://s3.eu-central-1.amazonaws.com/ilyiny-sagemaker-demo-artefacts/473d5d7e0d9951d321817f7ce88f65d1.template
+      TemplateURL: https://s3.eu-west-1.amazonaws.com/ilyiny-sagemaker-demo-artefacts/f8515d45bd513b0a30bdbdca648eee06.template
+  SageMakerStudio:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: IAM
+    Properties:
+      Parameters:
+        DomainName:
+          Ref: DomainName
+        UserProfileName:
+          Ref: UserProfileName
+        VpcId:
+          Fn::GetAtt:
+          - VPC
+          - Outputs.VPCId
+        SageMakerStudioSubnetIds:
+          Fn::GetAtt:
+          - VPC
+          - Outputs.SageMakerStudioSubnetId
+        SageMakerSecurityGroupIds:
+          Fn::GetAtt:
+          - VPC
+          - Outputs.SageMakerSecurityGroupId
+        SageMakerExecutionRoleArn:
+          Fn::GetAtt:
+          - IAM
+          - Outputs.ExecutionRoleArn
+      TemplateURL: https://s3.eu-west-1.amazonaws.com/ilyiny-sagemaker-demo-artefacts/d86a37290c0f220ab51858ddbbe54da4.template
 Outputs:
   VPCId:
     Description: The ID of VPC where SageMaker Studio will reside
@@ -114,10 +150,22 @@ Outputs:
     Value:
       Fn::GetAtt:
       - S3
-      - Outputs.DataBucket
+      - Outputs.DataBucketName
   SageMakerS3bucketModels:
     Description: Name of S3 bucket for models
     Value:
       Fn::GetAtt:
       - S3
-      - Outputs.ModelBucket
+      - Outputs.ModelBucketName
+  SageMakerStudioDomainId:
+    Description: SageMaker Studio domain id
+    Value:
+      Fn::GetAtt:
+      - SageMakerStudio
+      - SageMakerStudioDomainId
+  SageMakerStudioPresignedURL:
+    Description: Presigned-URL to start the Amazon SageMaker Studio
+    Value:
+      Fn::GetAtt:
+      - SageMakerStudio
+      - SageMakerStudioPresignedURL

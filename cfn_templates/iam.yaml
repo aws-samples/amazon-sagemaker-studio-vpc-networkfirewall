@@ -1,12 +1,15 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+
 AWSTemplateFormatVersion: 2010-09-09
 Description: Create IAM Roles for SageMaker Notebook Instance and KMS Key for Encrypting Notebook EBS Volume.
 
 Parameters:
   ProjectName:
     Type: String
-  DataBucket:
+  DataBucketName:
     Type: String
-  ModelBucket:
+  ModelBucketName:
     Type: String
   KMSAlias:
     Type: String
@@ -59,10 +62,10 @@ Resources:
               - s3:DeleteObject
               - s3:ListBucket
             Resource:
-              - !Sub arn:aws:s3:::${DataBucket}/*
-              - !Sub arn:aws:s3:::${DataBucket}
-              - !Sub arn:aws:s3:::${ModelBucket}/*
-              - !Sub arn:aws:s3:::${ModelBucket}
+              - !Sub arn:aws:s3:::${DataBucketName}/*
+              - !Sub arn:aws:s3:::${DataBucketName}
+              - !Sub arn:aws:s3:::${ModelBucketName}/*
+              - !Sub arn:aws:s3:::${ModelBucketName}
           - Sid: ECRAccess
             Effect: Allow
             Action:

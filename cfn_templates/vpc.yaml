@@ -1,3 +1,6 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+
 AWSTemplateFormatVersion: 2010-09-09
 Description: Creates a VPC with no internet gateway, one private subnet, and one network firewall private subnet.
 
@@ -85,16 +88,42 @@ Resources:
    Properties:
       Domain: vpc
 
+  DomainDenyStatefulRuleGroup:
+    Type: AWS::NetworkFirewall::RuleGroup
+    Properties:
+      RuleGroupName: !Sub "domain-deny-${ProjectName}"
+      Type: STATEFUL
+      Capacity: 100
+      RuleGroup:
+        RuleVariables:
+          IPSets:
+            HOME_NET:
+              Definition:
+                - !Ref VpcCIDR
+        RulesSource:
+          RulesSourceList:
+            TargetTypes:
+              - HTTP_HOST
+              - TLS_SNI
+            Targets: 
+              - ".kaggle.com"
+            GeneratedRulesType: "DENYLIST"
+      Tags:
+        - Key: Name
+          Value: !Sub "domain-deny-${ProjectName}"   
+
   FirewallPolicy:
     Type: AWS::NetworkFirewall::FirewallPolicy
     Properties: 
       Description: Network firewall policy to control SageMaker Studio internet ergress and ingress
+      FirewallPolicyName: !Sub "network-firewall-policy-${ProjectName}"
       FirewallPolicy: 
         StatelessDefaultActions: 
             - "aws:forward_to_sfe"
         StatelessFragmentDefaultActions: 
             - "aws:pass"
-      FirewallPolicyName: !Sub "network-firewall-policy-${ProjectName}"
+        StatefulRuleGroupReferences:
+          - ResourceArn: !Ref DomainDenyStatefulRuleGroup
 
   IGW:
     Type: AWS::EC2::InternetGateway
@@ -115,6 +144,9 @@ Resources:
 
   NetworkFirewall:
     Type: AWS::NetworkFirewall::Firewall
+    DependsOn: 
+      - FirewallSubnet
+      - FirewallPolicy
     Properties: 
       DeleteProtection: false
       Description: AWS Network Firewall to control internet ergress and ingress
@@ -193,13 +225,15 @@ Resources:
       SubnetId: !Ref SageMakerStudioSubnet
 
   # Routes
-#  IGWIngressRoute:
-#    Type: AWS::EC2::Route
-#    DependsOn: NetworkFirewall
-#    Properties:
-#      RouteTableId: !Ref IGWIngressRouteTable
-#      DestinationCidrBlock: !Ref NATGatewaySubnetCIDR
-#      VpcEndpointId: !Ref NetworkFirewall
+  # Since we have only one-AZ Firewall setup, we take the first Network Firewall VPC eindpoint from the EndpointsIds list
+  # This will not work in multi-AZ setup!
+  IGWIngressRoute:
+    Type: AWS::EC2::Route
+    DependsOn: NetworkFirewall
+    Properties:
+      RouteTableId: !Ref IGWIngressRouteTable
+      DestinationCidrBlock: !Ref NATGatewaySubnetCIDR
+      VpcEndpointId: !Select ["1", !Split [":", !Select ["0", !GetAtt NetworkFirewall.EndpointIds]]]
 
   FirewallEgressRoute:
     Type: AWS::EC2::Route
@@ -209,13 +243,15 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref IGW
 
-#  NATGatewayEgressRoute:
-#    Type: AWS::EC2::Route
-#    DependsOn: NetworkFirewall
-#    Properties:
-#      RouteTableId: !Ref NATGatewayRouteTable
-#      DestinationCidrBlock: 0.0.0.0/0
-#      VpcEndpointId: !Ref NetworkFirewall
+  # Since we have only one-AZ Firewall setup, we take the first Network Firewall VPC eindpoint from the EndpointsIds list
+  # This will not work in multi-AZ setup!
+  NATGatewayEgressRoute:
+    Type: AWS::EC2::Route
+    DependsOn: NetworkFirewall
+    Properties:
+      RouteTableId: !Ref NATGatewayRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      VpcEndpointId: !Select ["1", !Split [":", !Select ["0", !GetAtt NetworkFirewall.EndpointIds]]]
 
   SageMakerEgressRoute:
     Type: AWS::EC2::Route
@@ -454,12 +490,14 @@ Outputs:
     Value: !Ref SageMakerSecurityGroup
   NATGWSubnetCIDR:
     Value: !Ref NATGatewaySubnetCIDR
-  NetworkFirewallEndpointIds:
-    Value: !GetAtt NetworkFirewall.EndpointIds
   IGWRouteTableId:
     Value: !Ref IGWIngressRouteTable
   NATGWRouteTableId:
     Value: !Ref NATGatewayRouteTable
+  DataBucketName:
+    Value: !Ref DataBucketName
+  ModelBucketName:
+    Value: !Ref ModelBucketName
   S3VPCEndpointId:
     Description: The ID of the S3 VPC Endpoint
     Value: !Ref VPCEndpointS3
