@@ -236,7 +236,7 @@ The solution deploys the following resources:
 - S3 VPC endpoint (type `Gateway`)
 - AWS service-access VPC endpoints (type `Interface`) for various AWS services
 - SageMaker domain and user profile for the domain (to start an Amazon SageMaker Studio)
-- SageMaker IAM execution policy
+- SageMaker IAM execution role
 
 ## S3 resources
 The solution deploys two Amazon S3 buckets: 
