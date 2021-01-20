@@ -224,16 +224,19 @@ The solution deploys the following resources:
     - SageMaker subnet
     - NAT Gateway subnet
     - Network Firewall subnet
-- Internet Gateway, NAT Gateway, Network Firewall
-- Empty Network Firewall Policy
+- Internet Gateway, NAT Gateway, Network Firewall, and Firewall endpoint
+- Network Firewall Policy
+- Stateful rule group with a deny domain list
 - Elastic IP allocated to the NAT Gateway
 - Security Groups:
     - SageMaker security group
     - VPC endpoints security group
-- Proper security group inbound rules
-- 4x route tables for network routing and proper routes
+- Configured security group inbound rules
+- 4x route tables for network routing and configured routes
 - S3 VPC endpoint (type `Gateway`)
 - AWS service-access VPC endpoints (type `Interface`) for various AWS services
+- SageMaker domain and user profile for the domain (to start an Amazon SageMaker Studio)
+- SageMaker IAM execution policy
 
 ## S3 resources
 The solution deploys two Amazon S3 buckets: 
@@ -322,6 +325,7 @@ Start the Amazon SageMaker Studio from the pre-signed URL or via the AWS SageMak
 - S3 VPC interface endpoints for AWS public services
 - S3 bucket setup with the bucket policy. Demostrate there is no AWS console access to the solution buckets (`data` and `models`)
 - (optional) Network Firewall routing setup 
+- Firewall policy with a stateful rule group with the deny domain list
 
 ## S3 access 
 - open a notebook in SageMaker Studio.
