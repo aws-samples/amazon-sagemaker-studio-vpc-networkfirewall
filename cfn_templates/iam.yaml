@@ -136,7 +136,7 @@ Resources:
               Service: sagemaker.amazonaws.com
             Action: sts:AssumeRole
       Path: /
-      RoleName: !Sub ${ProjectName}-notebook-role
+      RoleName: !Sub ${ProjectName}-${AWS::Region}-notebook-role
       ManagedPolicyArns:
         - !Ref SageMakerNotebookInstancePolicy
         - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess

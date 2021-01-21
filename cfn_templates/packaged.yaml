@@ -41,7 +41,7 @@ Resources:
           Fn::GetAtt:
           - S3
           - Outputs.ModelBucketName
-      TemplateURL: https://s3.eu-west-1.amazonaws.com/ilyiny-sagemaker-demo-artefacts/3c3445cd49c64d342dbb06e35901e81b.template
+      TemplateURL: https://s3.us-west-2.amazonaws.com/ilyiny-sagemaker-demo-artefacts-us-west-2/fd5f4b9f56bf2d8b33f377fabb9d291a.template
   S3:
     Type: AWS::CloudFormation::Stack
     DependsOn: VPC
@@ -57,7 +57,7 @@ Resources:
           Fn::GetAtt:
           - VPC
           - Outputs.ModelBucketName
-      TemplateURL: https://s3.eu-west-1.amazonaws.com/ilyiny-sagemaker-demo-artefacts/56115a0619e778bdc0fa99c260aa02a7.template
+      TemplateURL: https://s3.us-west-2.amazonaws.com/ilyiny-sagemaker-demo-artefacts-us-west-2/56115a0619e778bdc0fa99c260aa02a7.template
   VPC:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -76,7 +76,7 @@ Resources:
           Fn::Sub: ${ProjectName}-${AWS::Region}-data
         ModelBucketName:
           Fn::Sub: ${ProjectName}-${AWS::Region}-models
-      TemplateURL: https://s3.eu-west-1.amazonaws.com/ilyiny-sagemaker-demo-artefacts/3d0d58eb15d519e575bfec9108c84606.template
+      TemplateURL: https://s3.us-west-2.amazonaws.com/ilyiny-sagemaker-demo-artefacts-us-west-2/3d0d58eb15d519e575bfec9108c84606.template
   SageMakerStudio:
     Type: AWS::CloudFormation::Stack
     DependsOn: IAM
@@ -102,7 +102,7 @@ Resources:
           Fn::GetAtt:
           - IAM
           - Outputs.ExecutionRoleArn
-      TemplateURL: https://s3.eu-west-1.amazonaws.com/ilyiny-sagemaker-demo-artefacts/9df4e5d352738f0ff537059d5599fa82.template
+      TemplateURL: https://s3.us-west-2.amazonaws.com/ilyiny-sagemaker-demo-artefacts-us-west-2/9df4e5d352738f0ff537059d5599fa82.template
 Outputs:
   VPCId:
     Description: The ID of VPC where SageMaker Studio will reside

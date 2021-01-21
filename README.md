@@ -1,14 +1,14 @@
 # Amazon SageMaker Studio demo
 
-This solution demostrates the setup and deployment of Amazon SageMaker Studio into a private VPC and implementation of various security controls (data encryption, network traffic monitoring and restriction, usage of VPC endpoints, subnets and security groups).
+This solution demostrates the setup and deployment of Amazon SageMaker Studio into a private VPC and implementation of multi-layer security controls (data encryption, network traffic monitoring and restriction, usage of VPC endpoints, subnets and security groups, IAM resource policies).
 
-The use case is a real-life environment security setup, which generally requires the following security controls implemented:
+The use case is a real-life environment security setup, which generally requires the following security-related features to be in place:
 - End-to-end data encryption at rest and in transit
 - Network traffic and activity monitoring and logging
 - Internet traffic restriction and monitoring
 - Control and restriction of Amazon S3 bucket access
 - Application of standard AWS security controls (IAM users, roles and permission policies) to SageMaker workloads
-- Application of standard AWS network security controls (NACLs, Network Firewall, NAT Gateway, security groups) to SageMaker workloads
+- Application of standard AWS multi-layer network security controls (NACLs, Network Firewall, NAT Gateway, security groups) to isolate SageMaker workloads like notebook instances, training and processing jobs, and inference endpoints
 
 All these specific requirements are covered in the solution.
 
@@ -32,7 +32,7 @@ You specify your private VPC configuration when you a SageMaker workload (a note
 
 Please refer to more details on specific deployment use cases to [10].
 
-After you configure the SageMaker workloads or SageMaker Studio to be hosted in your private VPC, you can apply all common VPC-based security controls (subnets, NACLs, security groups, VPC endpoints, NAT Gateway, and Network Firewall)j.
+After you configure the SageMaker workloads or SageMaker Studio to be hosted in your private VPC, you can apply all common VPC-based security controls (subnets, NACLs, security groups, VPC endpoints, NAT Gateway, and Network Firewall).
 
 ## Deploy SageMaker Studio to VPC
 You can choose to restrict which traffic can access the internet by [launching Studio in a Virtual Private Cloud (VPC)](https://docs.aws.amazon.com/sagemaker/latest/dg/onboard-vpc.html) of your choosing. This allows you fine-grained control of the network access and internet connectivity of your SageMaker Studio notebooks. You can disable direct internet access to add an additional layer of security. You can use AWS Network Firewall to implement further controls (stateless or stateful traffic filtering and applying your custom network firewall policies) on SageMaker workloads.
@@ -50,7 +50,14 @@ Direct internet access with `AppNetworkAccessType=DirectInternetOnly`:
 No direct internet access with `AppNetworkAccessType=VpcOnly`:
 ![SageMaker Studio VpcOnly network config](design/sagemaker-studio-vpc-only-network-settings.png)
 
-❗ You won't be able to run a Studio notebook unless your VPC has an interface endpoint to the SageMaker API and runtime, or a NAT gateway, and your security groups allow outbound connections.
+❗ You won't be able to run a Studio notebook in `VpcOnly` mode unless your VPC has an interface endpoint to the SageMaker API and runtime, or a NAT gateway, and your security groups allow outbound connections.
+
+## Data encryption at rest and transit
+Models and data are stored on the SageMaker Studio home directories in EFS or on SageMaker notebook EBS volumes. You can apply the [standard practices and patterns](https://docs.aws.amazon.com/sagemaker/latest/dg/encryption-at-rest.html) to encrypt data using AWS KMS keys. The demo solution creates an AWS KMS CMK for EBS volume encryption that you can use to encrypt notebook instance data.
+
+All communication with VPC endpoints to the public AWS services (SageMaker API, SageMaker Notebooks etc) are restricted to HTTPS protocol. You can control the set of network protocols for any communication between your protected workload subnet with help of VPC security groups or NACLs.
+
+See the [Amazon SageMaker developer guide](https://docs.aws.amazon.com/sagemaker/latest/dg/encryption-in-transit.html) for more information on protecting data in transit.
 
 ## Amazon S3 access control
 Developing ML models requires access to sensitive data stored on specific S3 buckets. You might want to implement controls to guarantee that:
@@ -109,13 +116,15 @@ Second, attach the following permission policy to the **S3 VPC Endpoint**:
     ]
 }
 ```
-This policy allows access the designated S3 buckets.
+This policy allows access the designated S3 buckets only.
 
 This combination of S3 bucket policy and VPC endpoint policy, together with Amazon SageMaker Studio VPC connectivity, establishes that SageMaker Studio can only access the referenced S3 bucket, and this S3 bucket can only be accessed from the VPC endpoint.
 
 ❗ You will not be able to access these S3 buckets from the AWS console or `aws cli`.
 
 All network traffic between Amazon SageMaker Studio and S3 is routed via the designated S3 VPC Endpoint over AWS private network and never traverse public internet.
+
+You may consider to enable access to other S3 buckets, for example to shared public SageMaker buckets, to enable additional functionality in the Amazon SageMaker Studio, like [JumpStart](https://docs.aws.amazon.com/sagemaker/latest/dg/studio-jumpstart.html).
 
 ## Secure configuration of SageMaker notebook instances
 Amazon SageMaker notebook instances can be launched with or without your Virtual Private Cloud (VPC) attached. When launched with your VPC attached, the notebook can either be configured with or without direct internet access:
@@ -149,12 +158,14 @@ For internet access the traffic should be routed via a NAT gateway or a virtual 
 
 ![Notebook instance with 1x ENI](design/notebook-instance-vpc-no-internet-access.png)
 
+Please consult [11] for more information on ENI configuration and routing options.
+
 ## Limit internet ingress and egress
 When you configure the SageMaker Studio or SageMaker workload to use your private VPC without direct internet access option, the routing of internet inbound and outbound traffic is fully controlled by your VPC networking setup.
 
 If you want to provide internet access through your VPC, just add an internet gateway or NAT gateway (if you want to block the inbound connections) and the proper routing entries. The internet traffic flows through your VPC, and you can implement other security controls such as inline inspections with a firewall or internet proxy. 
 
-You can use the **AWS Network Firewall** to implement URL, IP address, and domain-based inbound and outbound traffic filtering.
+You can use the [AWS Network Firewall](https://aws.amazon.com/network-firewall/) to implement URL, IP address, and domain-based stateful and stateless inbound and outbound traffic filtering.
 
 This solution demostrates the usage of the AWS Network Firewalls for domain names stateful filtering as a sample use case.
 
@@ -235,8 +246,6 @@ The solution deploys the following resources:
 - 4x route tables for network routing and configured routes
 - S3 VPC endpoint (type `Gateway`)
 - AWS service-access VPC endpoints (type `Interface`) for various AWS services
-- SageMaker domain and user profile for the domain (to start an Amazon SageMaker Studio)
-- SageMaker IAM execution role
 
 ## S3 resources
 The solution deploys two Amazon S3 buckets: 
@@ -252,8 +261,9 @@ As discussed above, this combination of S3 bucket policy and VPC endpoint policy
 Two AWS KMS customer keys are deployed by the solution:
 - a KMS key for S3 bucket encryption
 - a KMS key for SageMaker notebooks' EBS encryption
+- a SageMaker IAM execution role
 
-The solution also creates and deploys the IAM execution role for SageMaker notebooks and SageMaker Studio with pre-configured IAM policies.
+The solution also creates and deploys an IAM execution role for SageMaker notebooks and SageMaker Studio with pre-configured IAM policies.
 
 ## SageMaker resources
 The solution creates:
@@ -267,11 +277,16 @@ The solution creates:
 - An IAM user or role with administrative access
 - configured `aws cli` with that IAM user or role credentials
 - An Amazon S3 bucket in your account in the same region where you deploy the solution
+- AWS Network Firewall is [available](https://aws.amazon.com/network-firewall/faqs/) in the US East (N. Virginia), US West (Oregon), Europe (Ireland), and Asia Pacific (Sydney) regions
 
-❗ For CloudFormation template deployment you must use the S3 bucket in the same region as your deployment region.
-If you need to deploy the solution in different region, you need to create a bucket per region and specify the bucket name in the `make deploy` call.
+❗ For CloudFormation template deployment you must use the S3 bucket in the **same region** as your deployment region.
+If you need to deploy the solution in multiple regions, you need to create a bucket per region and specify the bucket name in the `make deploy` call as shown below.
+
+❗ The solution will successfully deploy AWS Network Firewall only in `us-east-1`, `us-west-2`, `eu-west-1`, or `ap-southeast-2` regions because of the Network Firewall availability.
 
 ## CloudFormation stack parameters
+There are no required parameters. All parameters have default values. You may want to change the `DomainName` or `*CIDR` parameters to avoid naming conflict with existing resources and CIDR allocations.
+
 - `ProjectName`: **OPTONAL**. Default is `sagemaker-studio-vpc`
 - `DomainName`: **OPTIONAL**: SageMaker domain name. Default is `sagemaker-demo-domain-<region>`  
 - `UserProfileName`: **OPTIONAL**: User profile name for the SageMaker domain. Default is `demouser-profile-<region>`
@@ -286,32 +301,41 @@ You can change the stack parameters in the `Makefile` or pass them as variable a
 
 ## Deployment steps
 
-To deploy the stack into the current account and region please complete the following steps.
+To deploy the stack into the **current account and region** please complete the following steps.
+
+### Create a S3 bucket
+You need a S3 bucket for CloudFormation deployment. If you don't have a S3 bucket in the current region, you can create one via the `aws cli`:
+```bash
+aws s3 mb s3://<your s3 bucket name>
+```
 
 ### Deploy CloudFormation stack
 ```bash
 make deploy CFN_ARTEFACT_S3_BUCKET=<your s3 bucket name>
 ```
 
-The stack will deploy all needed resources like VPC, network devices, security groups, S3 buckets, IAM policies, VPC endpoints and also create a SageMaker studio domain, and a new user profile.
+The bucket **must** be in the same region where you are deploying. You specificy just the bucket name, not a S3 URL or a bucket ARN.
+
+The stack will deploy all needed resources like VPC, network devices, security groups, S3 buckets, IAM policies and roles, VPC endpoints and also create a new SageMaker studio domain, and a new user profile.
+
+After deployment completes, you can see the full list of stack output values by running the following command in a terminal:
+```bash
+aws cloudformation describe-stacks \
+    --stack-name sagemaker-studio-demo \
+    --output table \
+    --query "Stacks[0].Outputs[*].[OutputKey, OutputValue]"
+```
 
 You can now launch the Amazon SageMaker Studio from the SageMaker console or generate a pre-signed URL and launch the Studio from the browser:
 ```bash
-DOMAIN_ID = # DomainId from the stack output
-USER_PROFILE_NAME = # UserProfileName from the stack output
+DOMAIN_ID=# SageMakerStudioDomainId from the stack output
+USER_PROFILE_NAME=# UserProfileName from the stack output
 
 aws sagemaker create-presigned-domain-url \
     --domain-id $DOMAIN_ID \
     --user-profile-name $USER_PROFILE_NAME
 ```
 
-To see the full list of stack output values you can run the following command in a terminal:
-```bash
-aws cloudformation describe-stacks \
-    --stack-name sagemaker-studio-demo \
-    --output text \
-    --query "Stacks[0].Outputs[*].[OutputKey, OutputValue]"
-```
 
 # Demo
 Start the Amazon SageMaker Studio from the pre-signed URL or via the AWS SageMaker console.
@@ -325,19 +349,27 @@ Start the Amazon SageMaker Studio from the pre-signed URL or via the AWS SageMak
 - S3 VPC interface endpoints for AWS public services
 - S3 bucket setup with the bucket policy. Demostrate there is no AWS console access to the solution buckets (`data` and `models`)
 - (optional) Network Firewall routing setup 
-- Firewall policy with a stateful rule group with the deny domain list
+- Firewall policy with a stateful rule group with a deny domain list
+- SageMaker IAM execution role
+- KMS CMKs for EBS and S3 bucket encryption
 
 ## S3 access 
 - open a notebook in SageMaker Studio.
 - create a file 
+```
+!touch test-file.txt
+```
 - copy file to `data` S3 bucket
 ```
 !aws s3 cp test-file.txt s3://<project_name>-<region>-data
 ```
 - the operation must be successful
 
-- try to copy the file or list any other bucket: AccessDenied error
-- try to list the `<project_name>-<region>-data` bucket from a command line: AccessDenied error
+- try to copy the file to any other bucket or list any other bucket: AccessDenied error
+```
+!aws s3 ls s3://<any other bucket in your account>
+```
+- try to list the `<project_name>-<region>-data` bucket from a command line (in a terminal, not in the notebook instance): AccessDenied error
 
 SageMaker Studio has access to only the designated buckets (`models` and `data`). You will not be able to use [SageMaker JumpStart](https://docs.aws.amazon.com/sagemaker/latest/dg/studio-jumpstart.html) or any other SageMaker Studio functionality which requires access to other Amazon S3 buckets. To enable access to other S3 buckets you have to change the S3 VPC endpoint policy.
 
@@ -354,7 +386,7 @@ Now we restrict access to another domain name:
 !git clone <https-path connection string>
 ```
 - the operation must be successful
-- go to Firewall Polices in AWS VPC console and select `network-firewall-policy-<ProjectName>` policy. Edit the `domain-deny-<ProjectName>` stateful rule group and add `.github.com` to Domain list field. 
+- go to Firewall Polices in AWS VPC console and select `network-firewall-policy-<ProjectName>` policy. Edit the `domain-deny-<ProjectName>` stateful rule group and add `.github.com` to the domain list field: 
 
 ![Firewall policy rule group](design/firewall-policy-rule-group-setup.png)
 
