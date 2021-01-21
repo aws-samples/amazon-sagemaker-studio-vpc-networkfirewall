@@ -365,3 +365,6 @@ Outputs:
   SageMakerStudioDomainId:
     Description: SageMaker Studio domain id
     Value: !GetAtt SageMakerDomainLambdaInvoke.DomainId
+  UserProfileName:
+    Description: SageMaker user profile name
+    Value: !Ref UserProfileName

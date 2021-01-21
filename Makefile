@@ -12,6 +12,8 @@ FUNCTION_DIR := functions
 CFN_ARTEFACT_S3_BUCKET ?= ilyiny-sagemaker-demo-artefacts
 CFN_TEMPLATE_DIR := cfn_templates
 PROJECT_NAME ?= sagemaker-studio-vpc
+SM_DOMAIN_NAME ?= sagemaker-demo-domain
+SM_USER_PROFILE_NAME ?= demouser-profile
 VPC_CIDR ?= 10.2.0.0/16
 FIREWALL_SN_CIDR ?= 10.2.1.0/24
 NAT_GW_SN_CIDR ?= 10.2.2.0/24
@@ -42,6 +44,8 @@ deploy: package
 		--stack-name $(APP_STACK_NAME) \
 		--parameter-overrides \
 		ProjectName=$(PROJECT_NAME) \
+		DomainName=$(SM_DOMAIN_NAME) \
+		UserProfileName=$(SM_USER_PROFILE_NAME) \
 		VpcCIDR=$(VPC_CIDR) \
 		FirewallSubnetCIDR=$(FIREWALL_SN_CIDR) \
 		NATGatewaySubnetCIDR=$(NAT_GW_SN_CIDR) \

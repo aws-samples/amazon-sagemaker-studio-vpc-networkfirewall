@@ -268,12 +268,12 @@ The solution creates:
 - configured `aws cli` with that IAM user or role credentials
 - An Amazon S3 bucket in your account in the same region where you deploy the solution
 
-❗ For CloudFormation template deployment you must use the S3 bucket in the same region as you deployment region.
+❗ For CloudFormation template deployment you must use the S3 bucket in the same region as your deployment region.
 If you need to deploy the solution in different region, you need to create a bucket per region and specify the bucket name in the `make deploy` call.
 
 ## CloudFormation stack parameters
 - `ProjectName`: **OPTONAL**. Default is `sagemaker-studio-vpc`
-- `DomainName`: **OPTIONAL**: SageMaker domain name. Default is `sagemaker-domain-<region>`  
+- `DomainName`: **OPTIONAL**: SageMaker domain name. Default is `sagemaker-demo-domain-<region>`  
 - `UserProfileName`: **OPTIONAL**: User profile name for the SageMaker domain. Default is `demouser-profile-<region>`
 - `VpcCIDR`: **OPTONAL**. Default is 10.2.0.0/16
 - `FirewallSubnetCIDR`: **OPTONAL**. Default is 10.2.1.0/24

@@ -11,11 +11,11 @@ Parameters:
   DomainName:
     Description: SageMaker domain name
     Type: String
-    Default: !Sub sagemaker-domain-${AWS::Region}
+    Default: sagemaker-demo-domain
   UserProfileName:
     Description: User profile name for the SageMaker domain
     Type: String
-    Default: !Sub demouser-profile-${AWS::Region}
+    Default: demouser-profile
   VpcCIDR:
     Type: String
     Default: 10.2.0.0/16
@@ -73,8 +73,8 @@ Resources:
     DependsOn: IAM
     Properties:
       Parameters:
-        DomainName: !Ref DomainName
-        UserProfileName: !Ref UserProfileName
+        DomainName: !Sub ${DomainName}-${AWS::Region}
+        UserProfileName: !Sub ${UserProfileName}-${AWS::Region}
         VpcId: !GetAtt VPC.Outputs.VPCId
         SageMakerStudioSubnetIds: !GetAtt VPC.Outputs.SageMakerStudioSubnetId
         SageMakerSecurityGroupIds: !GetAtt VPC.Outputs.SageMakerSecurityGroupId
@@ -108,10 +108,10 @@ Outputs:
     Value: !GetAtt S3.Outputs.ModelBucketName
   SageMakerStudioDomainId:
     Description: SageMaker Studio domain id
-    Value: !GetAtt SageMakerStudio.SageMakerStudioDomainId
+    Value: !GetAtt SageMakerStudio.Outputs.SageMakerStudioDomainId
   UserProfileName:
     Description: SageMaker user profile name
-    Value: !Ref UserProfileName
+    Value: !GetAtt SageMakerStudio.Outputs.UserProfileName
 
 
   

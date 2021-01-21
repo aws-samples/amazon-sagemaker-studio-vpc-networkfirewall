@@ -1,9 +1,6 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: This template creates the infrastructure required to implement and test
-  SageMaker Studio VPC Mode. It creates a VPC, Subnet, VPC Endpoints, VPC Policies,
-  and IAM Execution Roles. **WARNING** This template creates AWS Resources in your
-  account. You will be billed for the AWS resources used if you create a stack from
-  this template.
+Description: Amazon SageMaker Studio secure deployment demo. The deployment creates
+  all necessary network infrastructure and SageMaker Studio domain.
 Parameters:
   ProjectName:
     Type: String
@@ -11,13 +8,11 @@ Parameters:
   DomainName:
     Description: SageMaker domain name
     Type: String
-    Default:
-      Fn::Sub: sagemaker-domain-${AWS::Region}
+    Default: sagemaker-demo-domain
   UserProfileName:
     Description: User profile name for the SageMaker domain
     Type: String
-    Default:
-      Fn::Sub: demouser-profile-${AWS::Region}
+    Default: demouser-profile
   VpcCIDR:
     Type: String
     Default: 10.2.0.0/16
@@ -81,16 +76,16 @@ Resources:
           Fn::Sub: ${ProjectName}-${AWS::Region}-data
         ModelBucketName:
           Fn::Sub: ${ProjectName}-${AWS::Region}-models
-      TemplateURL: https://s3.eu-west-1.amazonaws.com/ilyiny-sagemaker-demo-artefacts/f8515d45bd513b0a30bdbdca648eee06.template
+      TemplateURL: https://s3.eu-west-1.amazonaws.com/ilyiny-sagemaker-demo-artefacts/3d0d58eb15d519e575bfec9108c84606.template
   SageMakerStudio:
     Type: AWS::CloudFormation::Stack
     DependsOn: IAM
     Properties:
       Parameters:
         DomainName:
-          Ref: DomainName
+          Fn::Sub: ${DomainName}-${AWS::Region}
         UserProfileName:
-          Ref: UserProfileName
+          Fn::Sub: ${UserProfileName}-${AWS::Region}
         VpcId:
           Fn::GetAtt:
           - VPC
@@ -107,7 +102,7 @@ Resources:
           Fn::GetAtt:
           - IAM
           - Outputs.ExecutionRoleArn
-      TemplateURL: https://s3.eu-west-1.amazonaws.com/ilyiny-sagemaker-demo-artefacts/d86a37290c0f220ab51858ddbbe54da4.template
+      TemplateURL: https://s3.eu-west-1.amazonaws.com/ilyiny-sagemaker-demo-artefacts/9df4e5d352738f0ff537059d5599fa82.template
 Outputs:
   VPCId:
     Description: The ID of VPC where SageMaker Studio will reside
@@ -162,10 +157,10 @@ Outputs:
     Value:
       Fn::GetAtt:
       - SageMakerStudio
-      - SageMakerStudioDomainId
-  SageMakerStudioPresignedURL:
-    Description: Presigned-URL to start the Amazon SageMaker Studio
+      - Outputs.SageMakerStudioDomainId
+  UserProfileName:
+    Description: SageMaker user profile name
     Value:
       Fn::GetAtt:
       - SageMakerStudio
-      - SageMakerStudioPresignedURL
+      - Outputs.UserProfileName
