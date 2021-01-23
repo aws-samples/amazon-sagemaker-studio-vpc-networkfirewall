@@ -1,4 +1,8 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+
 import json
+import time
 import sagemakerdomain
 import userprofile
 
@@ -29,6 +33,16 @@ event = {
 
 context = None
 
+# Test metadata
+SAGEMAKER_DOMAIN = "sagemakerdomain"
+USER_PROFILE = "userprofile"
+tests = [SAGEMAKER_DOMAIN, USER_PROFILE]
+
+function_map = {
+    tests[0]:sagemakerdomain.handler,
+    tests[1]:userprofile.handler
+}
+
 # Test driver
 def test_function(test_name, f, event, context):
     print(f"Testing {test_name}\n****START****")
@@ -39,46 +53,55 @@ def test_function(test_name, f, event, context):
     f(event, context)
     print(f"Testing {f.__name__}****END****")
 
+def test_run(test, event_name, domain_id):
+    event["RequestType"] = event_name
+
+    if test == "sagemakerdomain":
+
+        # SageMakerDomain test
+        event["ResourceProperties"] = {
+            "DomainName":DomainName,
+            "VpcId":VpcId,
+            "SageMakerStudioSubnetIds":SageMakerStudioSubnetIds,
+            "DefaultUserSettings":DefaultUserSettings
+        }
+        event["PhysicalResourceId"] = domain_id
+
+    elif test == "userprofile":
+
+        # UserProfile test
+        event["ResourceProperties"] = {
+            "DomainId":domain_id,
+            "UserProfileName":UserProfileName,
+            "UserSettings":UserSettings
+        }
+        event["PhysicalResourceId"] = UserProfileName
+
+    if event["RequestType"] == "Create":
+        event["PhysicalResourceId"] = None
+
+    test_function(test, function_map[test], event, context)
+
 ############################################
 # Test
 ############################################
 
-DomainId = "d-y08vngljr5ez"
-# sagemakerdomain, userprofile
-test = "sagemakerdomain"
-# Create, Update, Delete
-event["RequestType"] = "Delete"
+started_at = time.monotonic()
 
-if test == "sagemakerdomain":
+DomainId = "<domain_id>"
+for t in tests:
+    test_run(t, "Create", DomainId)
+print(f"Create time elapsed: {time.monotonic() - started_at}")
 
-    # SageMakerDomain test
-    event["ResourceProperties"] = {
-        "DomainName":DomainName,
-        "VpcId":VpcId,
-        "SageMakerStudioSubnetIds":SageMakerStudioSubnetIds,
-        "DefaultUserSettings":DefaultUserSettings
-    }
+for t in tests:
+    test_run(t, "Update", DomainId)
+print(f"Update time elapsed: {time.monotonic() - started_at}")
 
-    if event["RequestType"] == "Create":
-        event["PhysicalResourceId"] = None
-    else:
-        event["PhysicalResourceId"] = DomainId
+for t in tests[::-1]:
+    test_run(t, "Delete", DomainId)
+print(f"Delete time elapsed: {time.monotonic() - started_at}")
 
-    test_function("SageMakerDomain", sagemakerdomain.handler, event, context)
+test_time = time.monotonic() - started_at
 
-elif test == "userprofile":
-
-    # UserProfile test
-    event["ResourceProperties"] = {
-        "DomainId":DomainId,
-        "UserProfileName":UserProfileName,
-        "UserSettings":UserSettings
-    }
-
-    if event["RequestType"] == "Create":
-        event["PhysicalResourceId"] = None
-    else:
-        event["PhysicalResourceId"] = UserProfileName
-
-    test_function("UserProfile", userprofile.handler, event, context)
+print(f"Time elapsed: {test_time}")
 

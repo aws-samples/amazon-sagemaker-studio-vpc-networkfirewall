@@ -12,6 +12,8 @@ The use case is a real-life environment security setup, which generally requires
 
 All these specific requirements are covered in the solution.
 
+[Jump to the deployment instructions](README.md#Deployment)
+
 # SageMaker security
 You can apply all the same security and compliance approaches and best practices (authentication, authorization, VPC, network isolation, control and monitoring) as a consistent set of Amazon security features to Amazon SageMaker workloads and Amazon SageMaker Studio specifically. 
  
@@ -415,7 +417,12 @@ make delete
 
 Alternatively you can delete the stack from the AWS CloudFormation console.
 
+## Delete stack troubleshooting
+Sometimes stack might fail to delete. If the `sagemaker-studio-demo` stack deletion fails, check the events in the AWS CloudFormation console.
+
 If the deletion of the SageMaker domain fails, check if there are any running applications for the user profile as described in [Delete Amazon SageMaker Studio Domain](https://docs.aws.amazon.com/sagemaker/latest/dg/gs-studio-delete-domain.html). Try to delete the applications and re-run the `make delete` command or delete the stack from AWS CloudFormation console.
+
+If the deletion of the VPC fails, check if there are still EFS unreleased network interfaces. Delete the EFS and initiate the delete of the `sagemaker-studio-demo` stack again.
 
 # Resources
 [1]. [SageMaker Security](https://docs.aws.amazon.com/sagemaker/latest/dg/security.html)  

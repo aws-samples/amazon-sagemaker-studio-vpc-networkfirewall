@@ -68,18 +68,18 @@ Resources:
       TemplateURL: vpc.yaml
   
   # SageMaker domain, user profile and pre-signed URL
-#  SageMakerStudio:
-#    Type: AWS::CloudFormation::Stack
-#    DependsOn: IAM
-#    Properties:
-#      Parameters:
-#        DomainName: !Sub ${DomainName}-${AWS::Region}
-#        UserProfileName: !Sub ${UserProfileName}-${AWS::Region}
-#        VpcId: !GetAtt VPC.Outputs.VPCId
-#        SageMakerStudioSubnetIds: !GetAtt VPC.Outputs.SageMakerStudioSubnetId
-#        SageMakerSecurityGroupIds: !GetAtt VPC.Outputs.SageMakerSecurityGroupId
-#        SageMakerExecutionRoleArn: !GetAtt IAM.Outputs.ExecutionRoleArn
-#      TemplateURL: sagemaker-studio.yaml
+  SageMakerStudio:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: IAM
+    Properties:
+      Parameters:
+        DomainName: !Sub ${DomainName}-${AWS::Region}
+        UserProfileName: !Sub ${UserProfileName}-${AWS::Region}
+        VpcId: !GetAtt VPC.Outputs.VPCId
+        SageMakerStudioSubnetIds: !GetAtt VPC.Outputs.SageMakerStudioSubnetId
+        SageMakerSecurityGroupIds: !GetAtt VPC.Outputs.SageMakerSecurityGroupId
+        SageMakerExecutionRoleArn: !GetAtt IAM.Outputs.ExecutionRoleArn
+      TemplateURL: sagemaker-studio.yaml
 
 Outputs:
   VPCId:
@@ -106,12 +106,12 @@ Outputs:
   SageMakerS3bucketModels:
     Description: Name of S3 bucket for models
     Value: !GetAtt S3.Outputs.ModelBucketName
-#  SageMakerStudioDomainId:
-#    Description: SageMaker Studio domain id
-#    Value: !GetAtt SageMakerStudio.Outputs.SageMakerStudioDomainId
-#  UserProfileName:
-#    Description: SageMaker user profile name
-#    Value: !GetAtt SageMakerStudio.Outputs.UserProfileName
+  SageMakerStudioDomainId:
+    Description: SageMaker Studio domain id
+    Value: !GetAtt SageMakerStudio.Outputs.SageMakerStudioDomainId
+  UserProfileName:
+    Description: SageMaker user profile name
+    Value: !GetAtt SageMakerStudio.Outputs.UserProfileName
 
 
   

@@ -60,8 +60,9 @@ Resources:
                   - sagemaker:ListApps
                   - sagemaker:DeleteApp
                 Resource:
-                  - !Sub "arn:${AWS::Partition}:sagemaker:*:*:domain/*"
-                  - !Sub "arn:${AWS::Partition}:sagemaker:*:*:user-profile/*"
+                  - !Sub "arn:${AWS::Partition}:sagemaker:${AWS::Region}:${AWS::AccountId}:domain/*"
+                  - !Sub "arn:${AWS::Partition}:sagemaker:${AWS::Region}:${AWS::AccountId}:user-profile/*"
+                  - !Sub "arn:${AWS::Partition}:sagemaker:${AWS::Region}:${AWS::AccountId}:app/*"
               - Sid: SageMakerExecPassRole
                 Effect: Allow
                 Action:
