@@ -9,7 +9,7 @@ export PYTHONUNBUFFERED := 1
 FUNCTION_DIR := functions
 
 # CloudFormation deployment variables
-CFN_ARTEFACT_S3_BUCKET ?= ilyiny-sagemaker-demo-artefacts
+CFN_ARTEFACT_S3_BUCKET ?= 
 CFN_TEMPLATE_DIR := cfn_templates
 PROJECT_NAME ?= sagemaker-studio-vpc
 SM_DOMAIN_NAME ?= sagemaker-demo-domain

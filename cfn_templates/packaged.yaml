@@ -77,32 +77,6 @@ Resources:
         ModelBucketName:
           Fn::Sub: ${ProjectName}-${AWS::Region}-models
       TemplateURL: https://s3.us-west-2.amazonaws.com/ilyiny-sagemaker-demo-artefacts-us-west-2/3d0d58eb15d519e575bfec9108c84606.template
-  SageMakerStudio:
-    Type: AWS::CloudFormation::Stack
-    DependsOn: IAM
-    Properties:
-      Parameters:
-        DomainName:
-          Fn::Sub: ${DomainName}-${AWS::Region}
-        UserProfileName:
-          Fn::Sub: ${UserProfileName}-${AWS::Region}
-        VpcId:
-          Fn::GetAtt:
-          - VPC
-          - Outputs.VPCId
-        SageMakerStudioSubnetIds:
-          Fn::GetAtt:
-          - VPC
-          - Outputs.SageMakerStudioSubnetId
-        SageMakerSecurityGroupIds:
-          Fn::GetAtt:
-          - VPC
-          - Outputs.SageMakerSecurityGroupId
-        SageMakerExecutionRoleArn:
-          Fn::GetAtt:
-          - IAM
-          - Outputs.ExecutionRoleArn
-      TemplateURL: https://s3.us-west-2.amazonaws.com/ilyiny-sagemaker-demo-artefacts-us-west-2/9df4e5d352738f0ff537059d5599fa82.template
 Outputs:
   VPCId:
     Description: The ID of VPC where SageMaker Studio will reside
@@ -152,15 +126,3 @@ Outputs:
       Fn::GetAtt:
       - S3
       - Outputs.ModelBucketName
-  SageMakerStudioDomainId:
-    Description: SageMaker Studio domain id
-    Value:
-      Fn::GetAtt:
-      - SageMakerStudio
-      - Outputs.SageMakerStudioDomainId
-  UserProfileName:
-    Description: SageMaker user profile name
-    Value:
-      Fn::GetAtt:
-      - SageMakerStudio
-      - Outputs.UserProfileName

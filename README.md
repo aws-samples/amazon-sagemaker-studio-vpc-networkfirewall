@@ -1,6 +1,6 @@
 # Amazon SageMaker Studio demo
 
-This solution demostrates the setup and deployment of Amazon SageMaker Studio into a private VPC and implementation of multi-layer security controls (data encryption, network traffic monitoring and restriction, usage of VPC endpoints, subnets and security groups, IAM resource policies).
+This solution demostrates the setup and deployment of Amazon SageMaker Studio into a private VPC and implementation of multi-layer security controls, such as data encryption, network traffic monitoring and restriction, usage of VPC endpoints, subnets and security groups, IAM resource policies.
 
 The use case is a real-life environment security setup, which generally requires the following security-related features to be in place:
 - End-to-end data encryption at rest and in transit
@@ -226,7 +226,7 @@ The solution implements the following setup to demonstrate the usage of SageMake
 
 ![Amazon SageMaker Studio infrastructure overview](design/sagemaker-studio-vpc.drawio.svg)
 
-The solution uses only one availability zone and is not highly-available. The HA solution can be implemented by duplicating the single-AZ setup (subnets, NAT Gateway, Network Firewall VPC endpoints) to additional AZs.
+❗ The solution uses **only one availability zone (AZ)** and is not highly-available. The HA solution can be implemented by duplicating the single-AZ setup (subnets, NAT Gateway, Network Firewall VPC endpoints) to additional AZs.
 
 ## VPC resources
 The solution deploys the following resources:
@@ -403,14 +403,19 @@ You can demostrate any other stateless or stateful rules and implement traffic f
 You can also demostrate the usage of the SageMaker security group or NACL inbould and outbound rules. 
 
 # Clean up
-Delete the stack:
+This operation will delete the whole stack together with SageMaker Studio Domain and user profile.
+
+❗ All notebooks volumes, and all EFS home directories will be deleted as well - no user data will be preserved upon stack deletion.
+
+1. Exit all instances SageMaker Studio.
+2. Delete the stack:
 ```bash
 make delete
 ```
 
 Alternatively you can delete the stack from the AWS CloudFormation console.
 
-If the deletion of the SageMaker domain fails, try to delete running applications for the user profile as described in [Delete Amazon SageMaker Studio Domain](https://docs.aws.amazon.com/sagemaker/latest/dg/gs-studio-delete-domain.html)
+If the deletion of the SageMaker domain fails, check if there are any running applications for the user profile as described in [Delete Amazon SageMaker Studio Domain](https://docs.aws.amazon.com/sagemaker/latest/dg/gs-studio-delete-domain.html). Try to delete the applications and re-run the `make delete` command or delete the stack from AWS CloudFormation console.
 
 # Resources
 [1]. [SageMaker Security](https://docs.aws.amazon.com/sagemaker/latest/dg/security.html)  
@@ -433,9 +438,10 @@ If the deletion of the SageMaker domain fails, try to delete running application
 # Appendix
 
 ## aws cli commands to setup and launch Amazon SageMaker Studio
+The following commands show how you can create Studio Domain and user profile from a command line. This is for reference only, as the stack creates the domain and user profile automatically.
 
 ### Create an Amazon SageMaker Studio domain inside a VPC
-Please replace the variables with corresponding values from `sagemaker-studio-vpc` CloudFormation stack output (reference only, the stack creates the domain and the user profile).
+Please replace the variables with corresponding values from `sagemaker-studio-vpc` CloudFormation stack output:
 ```bash
 REGION=
 VPC_DOMAIN_NAME=

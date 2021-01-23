@@ -57,6 +57,8 @@ Resources:
                   - sagemaker:UpdateUserProfile
                   - sagemaker:DeleteUserProfile
                   - sagemaker:DescribeUserProfile
+                  - sagemaker:ListApps
+                  - sagemaker:DeleteApp
                 Resource:
                   - !Sub "arn:${AWS::Partition}:sagemaker:*:*:domain/*"
                   - !Sub "arn:${AWS::Partition}:sagemaker:*:*:user-profile/*"
@@ -79,125 +81,64 @@ Resources:
             import cfnresponse
             from botocore.exceptions import ClientError
 
-
             sm_client = boto3.client('sagemaker')
             logger = logging.getLogger(__name__)
 
-            SAGEMAKER_DOMAIN_AUTH_MODE = "IAM"
-            SAGEMAKER_NETWORK_ACCESS_TYPE = "VpcOnly"
-            SAGEMAKER_EFS_RETENTION_POLICY = "Delete"
-
-            def create_domain(config):
-                vpc_id = config['VpcId']
-                subnet_ids = config['SageMakerStudioSubnetIds']
-                default_user_settings = config['DefaultUserSettings']
-                domain_name = config['DomainName']
-
-                response = sm_client.create_domain(
-                    DomainName=domain_name,
-                    AuthMode=SAGEMAKER_DOMAIN_AUTH_MODE,
-                    DefaultUserSettings=default_user_settings,
-                    SubnetIds=subnet_ids.split(','),
-                    VpcId=vpc_id,
-                    AppNetworkAccessType=SAGEMAKER_NETWORK_ACCESS_TYPE
-                )
-
-                domain_id = response['DomainArn'].split('/')[-1]
-                created = False
-
-                while not created:
-                    response = sm_client.describe_domain(DomainId=domain_id)
-                    time.sleep(5)
-                    if response['Status'] == 'InService':
-                        created = True
-
-                logging.info(f"SageMaker domain created successfully: {domain_id}")
-                return response
-
-            def update_domain(domain_id, default_user_settings):
-                response = sm_client.update_domain(
-                    DomainId=domain_id,
-                    DefaultUserSettings=default_user_settings
-                )
-                updated = False
-
-                while not updated:
-                    response = sm_client.describe_domain(DomainId=domain_id)
-                    if response['Status'] == 'InService':
-                        updated = True
-                    else:
-                        logging.info(f"Updating .. {response['Status']}")
-                    time.sleep(5)
-
-                logging.info(f"SageMaker domain updated successfully")
-                return response
+            SAGEMAKER_DOMAIN_AUTH_MODE = 'IAM'
+            SAGEMAKER_NETWORK_ACCESS_TYPE = 'VpcOnly'
+            SAGEMAKER_EFS_RETENTION_POLICY = 'Delete'
 
             def delete_domain(domain_id):
-                response = sm_client.delete_domain(
-                    DomainId=domain_id,
-                    RetentionPolicy={
-                        'HomeEfsFileSystem': SAGEMAKER_EFS_RETENTION_POLICY
-                    }
-                )
-                deleted = False
-
-                while not deleted:
-                    try:
-                        sm_client.describe_domain(DomainId=domain_id)
-                    except ClientError as error:
-                        if error.response['Error']['Code'] == 'ResourceNotFound':
-                            logger.info(f"SageMaker domain {domain_id} has been deleted")
-                            deleted = True
-                            return
-                    time.sleep(5)
-
-                return response
-
-            def handle_create(event, context):
-                logger.info(f"Start creation of SageMaker Studio domain")
-                resource_config = event['ResourceProperties']
-
-                response_data = create_domain(resource_config)
-                cfnresponse.send(event, context, cfnresponse.SUCCESS,
-                                {'DomainId': response_data['DomainId']}, physicalResourceId=response_data['DomainId'])
-
-            def handle_update(event, context):
-                logging.info('Received Update event')
-                domain_id = event['PhysicalResourceId']
-                default_user_settings = event['ResourceProperties']['DefaultUserSettings']
-                update_domain(domain_id, default_user_settings)
-                cfnresponse.send(event, context, cfnresponse.SUCCESS, {'DomainId' : domain_id},
-                                physicalResourceId=event['PhysicalResourceId'])
-
-            def handle_delete(event, context):
-                logging.info('Received delete event')
-                domain_id = event['PhysicalResourceId']
                 try:
                     sm_client.describe_domain(DomainId=domain_id)
                 except:
-                    cfnresponse.send(event, context, cfnresponse.SUCCESS,
-                                    {}, physicalResourceId=event['PhysicalResourceId'])
                     return
 
-                delete_domain(domain_id)
-                cfnresponse.send(event, context, cfnresponse.SUCCESS, {},
-                                physicalResourceId=event['PhysicalResourceId'])
-
-            def handler(event, context):
+                sm_client.delete_domain(DomainId=domain_id,RetentionPolicy={'HomeEfsFileSystem': SAGEMAKER_EFS_RETENTION_POLICY})
 
                 try:
-                    if event['RequestType'] == 'Create':
-                        handle_create(event, context)
-                    elif event['RequestType'] == 'Update':
-                        handle_update(event, context)
+                    while sm_client.describe_domain(DomainId=domain_id):
+                        time.sleep(5)
+                except ClientError as error:
+                    if error.response['Error']['Code'] == 'ResourceNotFound':
+                        logger.info(f'SageMaker domain {domain_id} has been deleted')
+                        return
+
+            def handler(event, context):
+                response_data = {}
+                physicalResourceId = event.get('PhysicalResourceId')
+                config = event.get('ResourceProperties')
+
+                try:
+                    if event['RequestType'] in ['Create', 'Update']:
+                        if event['RequestType'] == 'Create':
+                            physicalResourceId = sm_client.create_domain(
+                                            DomainName=config['DomainName'],
+                                            AuthMode=SAGEMAKER_DOMAIN_AUTH_MODE,
+                                            DefaultUserSettings=config['DefaultUserSettings'],
+                                            SubnetIds=config['SageMakerStudioSubnetIds'].split(','),
+                                            VpcId=config['VpcId'],
+                                            AppNetworkAccessType=SAGEMAKER_NETWORK_ACCESS_TYPE
+                                        )['DomainArn'].split('/')[-1]
+
+                            logger.info(f'Created SageMaker Studio Domain:{physicalResourceId}')
+                        else:
+                            sm_client.update_domain(DomainId=physicalResourceId, DefaultUserSettings=config['DefaultUserSettings'])
+
+                        while sm_client.describe_domain(DomainId=physicalResourceId)['Status'] != 'InService':
+                            time.sleep(5)
+
+                        response_data = {'DomainId': physicalResourceId}
+
                     elif event['RequestType'] == 'Delete':
-                        handle_delete(event, context)
+                        delete_domain(physicalResourceId)
+
+                    cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data, physicalResourceId=physicalResourceId)
 
                 except ClientError as exception:
                     logging.error(exception)
-                    cfnresponse.send(event, context, cfnresponse.FAILED,
-                                    {}, error=str(exception))
-        Description: Creates SageMaker domain
+                    cfnresponse.send(event, context, cfnresponse.FAILED, response_data, physicalResourceId=physicalResourceId, reason=str(exception))
+        Description: Creates, updates or deletes SageMaker domain
         Handler: index.handler
         MemorySize: 128
         Role: !GetAtt LambdaExecutionRole.Arn
@@ -221,115 +162,69 @@ Resources:
             sm_client = boto3.client('sagemaker')
             logger = logging.getLogger(__name__)
 
-            def create_user_profile(config):
+            def delete_user_profile(config):    
                 domain_id = config['DomainId']
                 user_profile_name = config['UserProfileName']
-                user_settings = config['UserSettings']
-
-                response = sm_client.create_user_profile(
-                    DomainId=domain_id,
-                    UserProfileName=user_profile_name,
-                    UserSettings=user_settings,
-                )
-
-                created = False
-                while not created:
-                    response = sm_client.describe_user_profile(DomainId=domain_id, UserProfileName=user_profile_name)
-                    time.sleep(5)
-                    if response['Status'] == 'InService':
-                        created = True
-
-                logging.info(f"SageMaker user profile {user_profile_name} for domain {domain_id} created successfully")
-                return response
-
-            def delete_user_profile(domain_id, user_profile_name):
-                response = sm_client.delete_user_profile(
-                    DomainId=domain_id,
-                    UserProfileName=user_profile_name
-                )
-                deleted = False
-
-                while not deleted:
-                    try:
-                        sm_client.describe_user_profile(DomainId=domain_id, UserProfileName=user_profile_name)
-                    except ClientError as error:
-                        if error.response['Error']['Code'] == 'ResourceNotFound':
-                            logger.info('Deleted')
-                            deleted = True
-                            return
-                    time.sleep(5)
-
-                return response
-
-            def update_user_profile(domain_id, user_profile_name, user_settings):
-                response = sm_client.update_user_profile(
-                    DomainId=domain_id,
-                    UserProfileName=user_profile_name,
-                    UserSettings=user_settings
-                )
-                updated = False
-                while not updated:
-                    response = sm_client.describe_user_profile(DomainId=domain_id,UserProfileName=user_profile_name)
-                    if response['Status'] == 'InService':
-                        updated = True
-                    else:
-                        logging.info('Updating .. %s', response['Status'])
-                    time.sleep(5)
-
-                return response
-
-            def handle_create(event, context):
-
-                resource_config = event['ResourceProperties']
-
-                response_data = create_user_profile(resource_config)
-                cfnresponse.send(event, context, cfnresponse.SUCCESS,
-                                {'UserProfileName': response_data['UserProfileName']}, physicalResourceId=response_data['UserProfileName'])
-
-            def handle_delete(event, context):
-
-                user_profile_name = event['PhysicalResourceId']
-                domain_id = event['ResourceProperties']['DomainId']
+                logging.info(f'Start deleting user profile: {user_profile_name}')
 
                 try:
                     sm_client.describe_user_profile(DomainId=domain_id, UserProfileName=user_profile_name)
                 except:
-                    cfnresponse.send(event, context, cfnresponse.SUCCESS,
-                                    {}, physicalResourceId=event['PhysicalResourceId'])
+                    logging.info(f'Cannot retrieve {user_profile_name}')
                     return
 
-                delete_user_profile(domain_id, user_profile_name)
-                cfnresponse.send(event, context, cfnresponse.SUCCESS, {},
-                                physicalResourceId=event['PhysicalResourceId'])
+                for p in sm_client.get_paginator('list_apps').paginate(DomainIdEquals=domain_id, UserProfileNameEquals=user_profile_name):
+                    for a in p['Apps']:
+                        if a['Status'] != 'Deleted':
+                            sm_client.delete_app(DomainId=a['DomainId'], UserProfileName=a['UserProfileName'], AppType=a['AppType'], AppName=a['AppName'])
+                    
+                apps = 1
+                while apps:
+                    apps = 0
+                    for p in sm_client.get_paginator('list_apps').paginate(DomainIdEquals=domain_id, UserProfileNameEquals=user_profile_name):
+                        apps += len([a['AppName'] for a in p['Apps'] if a['Status'] != 'Deleted'])
+                    logging.info(f'Number of active apps: {str(apps)}')
+                    time.sleep(5)
 
-            def handle_update(event, context):
+                sm_client.delete_user_profile(DomainId=domain_id, UserProfileName=user_profile_name)
 
-                user_profile_name = event['PhysicalResourceId']
-                domain_id = event['ResourceProperties']['DomainId']
-                user_settings = event['ResourceProperties']['UserSettings']
-
-                update_user_profile(domain_id, user_profile_name, user_settings)
-
-                cfnresponse.send(event, context, cfnresponse.SUCCESS, {},
-                                physicalResourceId=event['PhysicalResourceId'])
+                try:
+                    while sm_client.describe_user_profile(DomainId=domain_id, UserProfileName=user_profile_name):
+                        time.sleep(5)
+                except ClientError as error:
+                    if error.response['Error']['Code'] == 'ResourceNotFound':
+                        logger.info(f'{user_profile_name} deleted')
+                        return
 
             def handler(event, context):
-                if event['RequestType']:
+                response_data = {}
+                physicalResourceId = event.get('PhysicalResourceId')
+                config = event.get('ResourceProperties')
 
-                  logging.info('Received event:' + event['RequestType'])
-                  try:
-                      if event['RequestType'] == 'Create':
-                          handle_create(event, context)
-                      elif event['RequestType'] == 'Update':
-                          handle_update(event, context)
-                      elif event['RequestType'] == 'Delete':
-                          handle_delete(event, context)
-                  except ClientError as exception:
-                      logging.error(exception)
-                      cfnresponse.send(event, context, cfnresponse.FAILED,
-                                      {}, error=str(exception))
+                try:
+                    if event['RequestType'] in ['Create', 'Update']:
+                        f = sm_client.update_user_profile
+                        if event['RequestType'] == 'Create':
+                            f = sm_client.create_user_profile
 
-        Description: Creates SageMaker user profile
+                        response = f(DomainId=config['DomainId'], UserProfileName=config['UserProfileName'], UserSettings=config['UserSettings'])
+
+                        while response.get('Status') != 'InService':
+                            response = sm_client.describe_user_profile(DomainId=config['DomainId'], UserProfileName=config['UserProfileName'])
+                            time.sleep(5)
+                        
+                        response_data = {'UserProfileName':response['UserProfileName']}
+                        physicalResourceId = response['UserProfileName']
+              
+                    elif event['RequestType'] == 'Delete':        
+                        delete_user_profile(config)
+
+                    cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data, physicalResourceId=physicalResourceId)
+
+                except ClientError as exception:
+                    logging.error(exception)
+                    cfnresponse.send(event, context, cfnresponse.FAILED, response_data, physicalResourceId=physicalResourceId, reason=str(exception))
+        Description: Creates, udpates or deletes SageMaker user profile
         Handler: index.handler
         MemorySize: 128
         Role: !GetAtt LambdaExecutionRole.Arn
