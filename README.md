@@ -1,4 +1,4 @@
-# Amazon SageMaker Studio in a private VPC with NAT Gateway and Networ Firewall
+# Amazon SageMaker Studio in a private VPC with NAT Gateway and Network Firewall
 
 This solution demostrates the setup and deployment of Amazon SageMaker Studio into a private VPC and implementation of multi-layer security controls, such as data encryption, network traffic monitoring and restriction, usage of VPC endpoints, subnets and security groups, IAM resource policies.
 
@@ -228,7 +228,7 @@ The solution implements the following setup to demonstrate the usage of SageMake
 
 ![Amazon SageMaker Studio infrastructure overview](design/sagemaker-studio-vpc.drawio.svg)
 
-❗ The solution uses **only one availability zone (AZ)** and is not highly-available. We do not recommend to use the single-AZ setup for any production deployment. The HA solution can be implemented by duplicating the single-AZ setup (subnets, NAT Gateway, Network Firewall VPC endpoints) to additional AZs.
+❗ The solution uses **only one availability zone (AZ)** and is not highly-available. We do not recommend to use the single-AZ setup for any production deployment. The HA solution can be implemented by duplicating the single-AZ setup (subnets, NAT Gateway, Network Firewall VPC endpoints) to additional AZs.  
 ❗ The CloudFormation template will setup the Network Firewall routes automatically. However, the current implementation works only with single-AZ deployment:
 ```yaml
 VpcEndpointId: !Select ["1", !Split [":", !Select ["0", !GetAtt NetworkFirewall.EndpointIds]]]
@@ -285,12 +285,12 @@ The solution creates:
 - configured `aws cli` with that IAM user, role credentials, or temporary credentials
 - An Amazon S3 bucket in your account in the same region where you deploy the solution (or you can create one as described below)
 - You deployment region is `us-east-1`, `us-west-2`, `eu-west-1`, or `ap-southeast-2`. AWS Network Firewall is [available](https://aws.amazon.com/network-firewall/faqs/) in the US East (N. Virginia), US West (Oregon), Europe (Ireland), and Asia Pacific (Sydney) regions
-
+  
 ❗ For CloudFormation template deployment you must use the S3 bucket in the **same region** as your deployment region.
 If you need to deploy the solution in multiple regions, you need to create a bucket per region and specify the corresponding bucket name in the `make deploy` call as shown below.
-
+  
 ❗ The solution will successfully deploy AWS Network Firewall only in `us-east-1`, `us-west-2`, `eu-west-1`, or `ap-southeast-2` regions because of the Network Firewall availability. In all other regions you will get a CloudFormation validation exception.
-
+  
 ❗ If you have already one or more SageMaker domains in the current region deployed, please check your service quota and make sure you can deploy one more SageMaker domain. The deployment will fail if you exceed your quota on the SageMaker domains.
 
 ## CloudFormation stack parameters
@@ -451,9 +451,6 @@ If the deletion of the VPC fails, check if there are still any network interface
 [11]. [Understanding Amazon SageMaker notebook instance networking configurations and advanced routing options](https://aws.amazon.com/blogs/machine-learning/understanding-amazon-sagemaker-notebook-instance-networking-configurations-and-advanced-routing-options/)  
 [12]. [Create Amazon SageMaker Studio using AWS CloudFormation](https://aws.amazon.com/blogs/machine-learning/creating-amazon-sagemaker-studio-domains-and-user-profiles-using-aws-cloudformation/)
 
-# Internal AWS resources
-- [AWS Network Firewall CloudFormation templates](https://gitlab.aws.dev/shkahma/anfw-templates)  
-- [Discussion how to deploy AWS Network Firewall with CloudFormation](https://answers.amazon.com/questions/176301#176315)  
 
 # Appendix
 
