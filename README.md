@@ -407,7 +407,7 @@ The access is denied because the S3 VPC endpoint policy doesn't allow access to 
 
 Now add the follwing statement to the S3 VPC endpoint policy:
 ```json
-  {
+    {
       "Effect": "Allow",
       "Principal": "*",
       "Action": [
@@ -431,7 +431,8 @@ Here we show how the internet inbound or outbound access can be controled with A
 
 The solution deploys a [network firewall policy](https://docs.aws.amazon.com/network-firewall/latest/developerguide/firewall-policies.html) with a stateful rule group with a deny domain list. This policy is attached to the network firewall.
 All inbound and outbound internet traffic is allowed now, except for `.kaggle.com` domain, which is on the deny list.
-First, we try to access the `https://kaggle.com/`. Open the same or a new notebook in the SageMaker Studio and try to download the front page from `kaggle.com`:
+First, we try to access the `https://kaggle.com/`.   
+- Open the same or a new notebook in the SageMaker Studio and try to download the front page from `kaggle.com`:
 ```
 !wget https://kaggle.com/
 ```
