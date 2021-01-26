@@ -139,7 +139,7 @@ Resources:
       RoleName: !Sub ${ProjectName}-${AWS::Region}-notebook-role
       ManagedPolicyArns:
         - !Ref SageMakerNotebookInstancePolicy
-        - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess
+#        - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess
 
   KMSKey:
     Type: AWS::KMS::Key

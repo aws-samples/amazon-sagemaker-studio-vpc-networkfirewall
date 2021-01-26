@@ -1,4 +1,4 @@
-# Amazon SageMaker Studio demo
+# Amazon SageMaker Studio in a private VPC with NAT Gateway and Networ Firewall
 
 This solution demostrates the setup and deployment of Amazon SageMaker Studio into a private VPC and implementation of multi-layer security controls, such as data encryption, network traffic monitoring and restriction, usage of VPC endpoints, subnets and security groups, IAM resource policies.
 
@@ -228,24 +228,29 @@ The solution implements the following setup to demonstrate the usage of SageMake
 
 ![Amazon SageMaker Studio infrastructure overview](design/sagemaker-studio-vpc.drawio.svg)
 
-❗ The solution uses **only one availability zone (AZ)** and is not highly-available. The HA solution can be implemented by duplicating the single-AZ setup (subnets, NAT Gateway, Network Firewall VPC endpoints) to additional AZs.
+❗ The solution uses **only one availability zone (AZ)** and is not highly-available. We do not recommend to use the single-AZ setup for any production deployment. The HA solution can be implemented by duplicating the single-AZ setup (subnets, NAT Gateway, Network Firewall VPC endpoints) to additional AZs.
+❗ The CloudFormation template will setup the Network Firewall routes automatically. However, the current implementation works only with single-AZ deployment:
+```yaml
+VpcEndpointId: !Select ["1", !Split [":", !Select ["0", !GetAtt NetworkFirewall.EndpointIds]]]
+```
+For multi-AZ setup you need to implement a CloudFormation custom resource (e.g. Lambda function) to setup the Network Firewall endpoints in each subnet properly.
 
 ## VPC resources
 The solution deploys the following resources:
 - VPC with a specified CIDR
-- 3x private subnets with specified CIDRs: 
+- Three private subnets with specified CIDRs: 
     - SageMaker subnet
     - NAT Gateway subnet
     - Network Firewall subnet
-- Internet Gateway, NAT Gateway, Network Firewall, and Firewall endpoint
+- Internet Gateway, NAT Gateway, Network Firewall, and Firewall endpoint in the Network Firewall subnet
 - Network Firewall Policy
-- Stateful rule group with a deny domain list
+- Stateful rule group with a deny domain list with a single domain on the list
 - Elastic IP allocated to the NAT Gateway
 - Security Groups:
     - SageMaker security group
     - VPC endpoints security group
 - Configured security group inbound rules
-- 4x route tables for network routing and configured routes
+- Four route tables for network routing and configured routes
 - S3 VPC endpoint (type `Gateway`)
 - AWS service-access VPC endpoints (type `Interface`) for various AWS services
 
@@ -277,17 +282,19 @@ The solution creates:
 ## Prerequisites
 - An AWS Account
 - An IAM user or role with administrative access
-- configured `aws cli` with that IAM user or role credentials
-- An Amazon S3 bucket in your account in the same region where you deploy the solution
-- AWS Network Firewall is [available](https://aws.amazon.com/network-firewall/faqs/) in the US East (N. Virginia), US West (Oregon), Europe (Ireland), and Asia Pacific (Sydney) regions
+- configured `aws cli` with that IAM user, role credentials, or temporary credentials
+- An Amazon S3 bucket in your account in the same region where you deploy the solution (or you can create one as described below)
+- You deployment region is `us-east-1`, `us-west-2`, `eu-west-1`, or `ap-southeast-2`. AWS Network Firewall is [available](https://aws.amazon.com/network-firewall/faqs/) in the US East (N. Virginia), US West (Oregon), Europe (Ireland), and Asia Pacific (Sydney) regions
 
 ❗ For CloudFormation template deployment you must use the S3 bucket in the **same region** as your deployment region.
-If you need to deploy the solution in multiple regions, you need to create a bucket per region and specify the bucket name in the `make deploy` call as shown below.
+If you need to deploy the solution in multiple regions, you need to create a bucket per region and specify the corresponding bucket name in the `make deploy` call as shown below.
 
-❗ The solution will successfully deploy AWS Network Firewall only in `us-east-1`, `us-west-2`, `eu-west-1`, or `ap-southeast-2` regions because of the Network Firewall availability.
+❗ The solution will successfully deploy AWS Network Firewall only in `us-east-1`, `us-west-2`, `eu-west-1`, or `ap-southeast-2` regions because of the Network Firewall availability. In all other regions you will get a CloudFormation validation exception.
+
+❗ If you have already one or more SageMaker domains in the current region deployed, please check your service quota and make sure you can deploy one more SageMaker domain. The deployment will fail if you exceed your quota on the SageMaker domains.
 
 ## CloudFormation stack parameters
-There are no required parameters. All parameters have default values. You may want to change the `DomainName` or `*CIDR` parameters to avoid naming conflict with existing resources and CIDR allocations.
+There are no required parameters. All parameters have default values. You may want to change the `DomainName` or `*CIDR` parameters to avoid naming conflict with the existing resources and CIDR allocations.
 
 - `ProjectName`: **OPTONAL**. Default is `sagemaker-studio-vpc`
 - `DomainName`: **OPTIONAL**: SageMaker domain name. Default is `sagemaker-demo-domain-<region>`  
@@ -299,7 +306,7 @@ There are no required parameters. All parameters have default values. You may wa
 
 You can change the stack parameters in the `Makefile` or pass them as variable assignments as part of `make` call.
 
-❗ Please make sure that default or your custom CIDRs do not conflict with any existing VPC in the account and the region where you are deploying the CloudFormation stack
+❗ Please make sure that default or your custom CIDRs do not conflict with any existing VPC in the account and the region where you are deploying the CloudFormation stack.
 
 ## Deployment steps
 
@@ -318,7 +325,7 @@ make deploy CFN_ARTEFACT_S3_BUCKET=<your s3 bucket name>
 
 The bucket **must** be in the same region where you are deploying. You specificy just the bucket name, not a S3 URL or a bucket ARN.
 
-The stack will deploy all needed resources like VPC, network devices, security groups, S3 buckets, IAM policies and roles, VPC endpoints and also create a new SageMaker studio domain, and a new user profile.
+The stack will deploy all needed resources like VPC, network devices, route tables, security groups, S3 buckets, IAM policies and roles, VPC endpoints and also create a new SageMaker studio domain, and a new user profile.
 
 After deployment completes, you can see the full list of stack output values by running the following command in a terminal:
 ```bash
@@ -338,20 +345,20 @@ aws sagemaker create-presigned-domain-url \
     --user-profile-name $USER_PROFILE_NAME
 ```
 
-
 # Demo
 Start the Amazon SageMaker Studio from the pre-signed URL or via the AWS SageMaker console.
 
 ## Infrastructure walkthrough
+Take a look to the following components and services created by the deployment:
 - VPC setup
 - Subnets
 - Network devices (NAT Gateway, Network Firewall) and the route tables
 - Security groups
 - S3 VPC endpoint setup with the endpoint policy 
 - S3 VPC interface endpoints for AWS public services
-- S3 bucket setup with the bucket policy. Demostrate there is no AWS console access to the solution buckets (`data` and `models`)
-- (optional) Network Firewall routing setup 
-- Firewall policy with a stateful rule group with a deny domain list
+- S3 buckets (named `<project_name>-<region>-models` and `<project_name>-<region>-data`) with the bucket policy. You can try and see that there is no AWS console access to the solution buckets (`data` and `models`). When you try to list the bucket content in AWS console you will get `AccessDenied` exception
+- Network Firewall routing setup. You might want to read through [8] to familirize yourself with different types of AWS Network Firewall deployment
+- Firewall policy with a stateful rule group with a deny domain list. There is a single domain `.kaggle.com` on the list
 - SageMaker IAM execution role
 - KMS CMKs for EBS and S3 bucket encryption
 
@@ -378,8 +385,13 @@ SageMaker Studio has access to only the designated buckets (`models` and `data`)
 ## Internet access
 Here we show how the internet inbound or outbound access can be controled with AWS Network Firewall.
 
-The solution deploys a network firewall policy with a stateful rule group with a deny domain list. This policy is attached to the network firewall.
+The solution deploys a [network firewall policy](https://docs.aws.amazon.com/network-firewall/latest/developerguide/firewall-policies.html) with a stateful rule group with a deny domain list. This policy is attached to the network firewall.
 All inbound and outbound internet traffic is allowed now, except for `.kaggle.com` domain, which is on the deny list.
+First, we try to access the `https://kaggle.com/`. Open the same or a new notebook in the SageMaker Studio and try to download the front page from `kaggle.com`:
+```
+!wget https://kaggle.com/
+```
+The request will timeout as the domain is restricted and users cannot connect to this domain from any SageMaker Studio notebooks.
 
 Now we restrict access to another domain name:
 
@@ -391,6 +403,7 @@ Now we restrict access to another domain name:
 - go to Firewall Polices in AWS VPC console and select `network-firewall-policy-<ProjectName>` policy. Edit the `domain-deny-<ProjectName>` stateful rule group and add `.github.com` to the domain list field: 
 
 ![Firewall policy rule group](design/firewall-policy-rule-group-setup.png)
+Check that the Action is set to `Deny`.
 
 Now the domain name `.github.com` is on the deny-list. Any inbound our outbound traffic from this domain will be dropped.
 
@@ -400,9 +413,9 @@ Now the domain name `.github.com` is on the deny-list. Any inbound our outbound 
 ```
 - the operation will timeout this time - the access to the `.github.com` domain is blocked by the network firewall
 
-You can demostrate any other stateless or stateful rules and implement traffic filtering based on a classical 5-tuple (protocol, source IP, source port, destination IP, destination port) by creating and enabling new firewall policy rule groups.
+You can create any other stateless or stateful rules and implement traffic filtering based on a classical 5-tuple (protocol, source IP, source port, destination IP, destination port) by creating and enabling new [firewall policy rule groups](https://docs.aws.amazon.com/network-firewall/latest/developerguide/firewall-policies.html).
 
-You can also demostrate the usage of the SageMaker security group or NACL inbould and outbound rules. 
+You can also add another network security layer by using the SageMaker security group or a [Network ACL](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html) with specific inbould and outbound rules. 
 
 # Clean up
 This operation will delete the whole stack together with SageMaker Studio Domain and user profile.
@@ -422,7 +435,7 @@ Sometimes stack might fail to delete. If the `sagemaker-studio-demo` stack delet
 
 If the deletion of the SageMaker domain fails, check if there are any running applications for the user profile as described in [Delete Amazon SageMaker Studio Domain](https://docs.aws.amazon.com/sagemaker/latest/dg/gs-studio-delete-domain.html). Try to delete the applications and re-run the `make delete` command or delete the stack from AWS CloudFormation console.
 
-If the deletion of the VPC fails, check if there are still EFS unreleased network interfaces. Delete the EFS and initiate the delete of the `sagemaker-studio-demo` stack again.
+If the deletion of the VPC fails, check if there are still any network interfaces (ENI) unreleased by EFS. Delete the EFS and initiate the delete of the `sagemaker-studio-demo` stack again.
 
 # Resources
 [1]. [SageMaker Security](https://docs.aws.amazon.com/sagemaker/latest/dg/security.html)  
