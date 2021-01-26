@@ -1,6 +1,6 @@
 # Amazon SageMaker Studio in a private VPC with NAT Gateway and Network Firewall
 
-This solution demostrates the setup and deployment of Amazon SageMaker Studio into a private VPC and implementation of multi-layer security controls, such as data encryption, network traffic monitoring and restriction, usage of VPC endpoints, subnets and security groups, IAM resource policies.
+This solution demonstrates the setup and deployment of Amazon SageMaker Studio into a private VPC and implementation of multi-layer security controls, such as data encryption, network traffic monitoring and restriction, usage of VPC endpoints, subnets and security groups, and IAM resource policies.
 
 The use case is a real-life environment security setup, which generally requires the following security-related features to be in place:
 - End-to-end data encryption at rest and in transit
@@ -28,9 +28,9 @@ For example, you can enable network isolation controls when you create a SageMak
 ![container network isolation](design/sm-container-network-isolation.png)
 
 ## Access to resources in VPC
-To avoid making your data and model containers accessible over the internet, we recommend that you create a **private VPC** and configure it to control access to them. Using a VPC helps to protect your training containers and data because you can configure your VPC so that it is not connected to the internet. Using a VPC also allows you to monitor all network traffic in and out of your training containers by using [VPC flow logs](https://docs.aws.amazon.com/vpc/latest/userguide/flow-logs.html).
+To avoid making your data and model containers accessible over the internet, we recommend that you create a **private VPC** and configure it to control access to your AWS resources. Using a VPC helps to protect your training containers and data because you can configure your VPC so that it is not connected to the internet and represents a completely isolated network environment. Using a VPC also allows you to monitor all network traffic in and out of your ML containers by using [VPC flow logs](https://docs.aws.amazon.com/vpc/latest/userguide/flow-logs.html).
 
-You specify your private VPC configuration when you a SageMaker workload (a notebook instance, processing or training job, model) by specifying subnets and security groups. When you specify the subnets and security groups, SageMaker creates _elastic network interfaces_ (ENI) that are associated with your security groups in one of the subnets. Network interfaces allow your model containers to connect to resources in your VPC.
+You specify your private VPC configuration when you create a SageMaker workload (a notebook instance, processing or training job, model) by selecting a VPC and specifying subnets and security groups. When you specify the subnets and security groups, SageMaker creates _elastic network interfaces_ (ENI) that are associated with your security groups in one of the subnets. Network interfaces allow your model containers to connect to resources in your VPC.
 
 Please refer to more details on specific deployment use cases to [10].
 
@@ -55,7 +55,7 @@ No direct internet access with `AppNetworkAccessType=VpcOnly`:
 ❗ You won't be able to run a Studio notebook in `VpcOnly` mode unless your VPC has an interface endpoint to the SageMaker API and runtime, or a NAT gateway, and your security groups allow outbound connections.
 
 ## Data encryption at rest and transit
-Models and data are stored on the SageMaker Studio home directories in EFS or on SageMaker notebook EBS volumes. You can apply the [standard practices and patterns](https://docs.aws.amazon.com/sagemaker/latest/dg/encryption-at-rest.html) to encrypt data using AWS KMS keys. The demo solution creates an AWS KMS CMK for EBS volume encryption that you can use to encrypt notebook instance data.
+Models and data are stored on the SageMaker Studio home directories in EFS or on SageMaker notebook EBS volumes. You can apply the [standard practices and patterns](https://docs.aws.amazon.com/sagemaker/latest/dg/encryption-at-rest.html) to encrypt data using AWS KMS keys. This solution creates an AWS KMS CMK for EBS volume encryption that you can use to encrypt notebook instance data.
 
 All communication with VPC endpoints to the public AWS services (SageMaker API, SageMaker Notebooks etc) are restricted to HTTPS protocol. You can control the set of network protocols for any communication between your protected workload subnet with help of VPC security groups or NACLs.
 
@@ -124,9 +124,25 @@ This combination of S3 bucket policy and VPC endpoint policy, together with Amaz
 
 ❗ You will not be able to access these S3 buckets from the AWS console or `aws cli`.
 
-All network traffic between Amazon SageMaker Studio and S3 is routed via the designated S3 VPC Endpoint over AWS private network and never traverse public internet.
+All network traffic between Amazon SageMaker Studio and S3 is routed via the designated S3 VPC Endpoint over AWS private network and never traverses public internet.
 
-You may consider to enable access to other S3 buckets, for example to shared public SageMaker buckets, to enable additional functionality in the Amazon SageMaker Studio, like [JumpStart](https://docs.aws.amazon.com/sagemaker/latest/dg/studio-jumpstart.html).
+You may consider to enable access to other S3 buckets via S3 VPC endpoint policy, for example to shared public SageMaker buckets, to enable additional functionality in the Amazon SageMaker Studio, like [JumpStart](https://docs.aws.amazon.com/sagemaker/latest/dg/studio-jumpstart.html).
+If you want to have access ot JumpStart, you must add the following statement to the S3 VPC endpoint policy:
+```json
+    {
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": [
+        "s3:GetObject"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEqualsIgnoreCase": {
+          "s3:ExistingObjectTag/SageMaker": "true"
+        }
+      }
+    }
+```
 
 ## Secure configuration of SageMaker notebook instances
 Amazon SageMaker notebook instances can be launched with or without your Virtual Private Cloud (VPC) attached. When launched with your VPC attached, the notebook can either be configured with or without direct internet access:
@@ -381,6 +397,33 @@ Take a look to the following components and services created by the deployment:
 - try to list the `<project_name>-<region>-data` bucket from a command line (in a terminal, not in the notebook instance): AccessDenied error
 
 SageMaker Studio has access to only the designated buckets (`models` and `data`). You will not be able to use [SageMaker JumpStart](https://docs.aws.amazon.com/sagemaker/latest/dg/studio-jumpstart.html) or any other SageMaker Studio functionality which requires access to other Amazon S3 buckets. To enable access to other S3 buckets you have to change the S3 VPC endpoint policy.
+
+Now we are going to change the S3 VPC endpoint policy and to allow access to additional S3 resources.
+- First, try to open SageMaker Studio JumpStart:
+![SageMaker Studio JumpStart](design/sm-studio-jumpstart.png)
+
+The access is denied because the S3 VPC endpoint policy doesn't allow access to any S3 buckets except for `models` and `data` as configured in the endpoint policy.
+
+Now add the follwing statement to the S3 VPC endpoint policy:
+```json
+  {
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": [
+        "s3:GetObject"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEqualsIgnoreCase": {
+          "s3:ExistingObjectTag/SageMaker": "true"
+        }
+      }
+    }
+```
+
+- Refresh the JumpPage start page - now you have access to all JumpStart resources
+
+We have seen now, that you can control access to S3 buckets via combination of S3 bucket policy and S3 Endpoint policy.
 
 ## Internet access
 Here we show how the internet inbound or outbound access can be controled with AWS Network Firewall.
