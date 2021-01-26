@@ -402,7 +402,8 @@ Now we are going to change the S3 VPC endpoint policy and to allow access to add
 - First, try to open SageMaker Studio JumpStart:
 ![SageMaker Studio JumpStart](design/sm-studio-jumpstart.png)
 
-The access is denied because the S3 VPC endpoint policy doesn't allow access to any S3 buckets except for `models` and `data` as configured in the endpoint policy.
+The access is denied because the S3 VPC endpoint policy doesn't allow access to any S3 buckets except for `models` and `data` as configured in the endpoint policy:
+![S3 access denied](design/jumpstart-no-access-s3.png)
 
 Now add the follwing statement to the S3 VPC endpoint policy:
 ```json
