@@ -4,263 +4,189 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: Creates SageMaker Studio domain and user profile for the SageMaker Studio
 
+Mappings: 
+  RegionMap: 
+    us-east-1: 
+      datascience: "arn:aws:sagemaker:us-east-1:081325390199:image/datascience-1.0"
+      datawrangler: "arn:aws:sagemaker:us-east-1:663277389841:image/sagemaker-data-wrangler-1.0"
+    us-east-2:
+      datascience: "arn:aws:sagemaker:us-east-2:429704687514:image/datascience-1.0"
+      datawrangler: "arn:aws:sagemaker:us-east-2:415577184552:image/sagemaker-data-wrangler-1.0"      
+    us-west-1: 
+      datascience: "arn:aws:sagemaker:us-west-1:742091327244:image/datascience-1.0"
+      datawrangler: "arn:aws:sagemaker:us-west-1:926135532090:image/sagemaker-data-wrangler-1.0"
+    us-west-2: 
+      datascience: "arn:aws:sagemaker:us-west-2:236514542706:image/datascience-1.0"
+      datawrangler: "arn:aws:sagemaker:us-west-2:174368400705:image/sagemaker-data-wrangler-1.0"
+    af-south-1:
+      datascience: "arn:aws:sagemaker:af-south-1:559312083959:image/datascience-1.0"
+      datawrangler: "arn:aws:sagemaker:af-south-1:143210264188:image/sagemaker-data-wrangler-1.0"    
+    ap-east-1:
+      datascience: "arn:aws:sagemaker:ap-east-1:493642496378:image/datascience-1.0"
+      datawrangler: "arn:aws:sagemaker:ap-east-1:707077482487:image/sagemaker-data-wrangler-1.0"
+    ap-south-1:
+      datascience: "arn:aws:sagemaker:ap-south-1:394103062818:image/datascience-1.0"
+      datawrangler: "arn:aws:sagemaker:ap-south-1:089933028263:image/sagemaker-data-wrangler-1.0"  
+    ap-northeast-2:
+      datascience: "arn:aws:sagemaker:ap-northeast-2:806072073708:image/datascience-1.0"
+      datawrangler: "arn:aws:sagemaker:ap-northeast-2:131546521161:image/sagemaker-data-wrangler-1.0"
+    ap-southeast-1:
+      datascience: "arn:aws:sagemaker:ap-southeast-1:492261229750:image/datascience-1.0"
+      datawrangler: "arn:aws:sagemaker:ap-southeast-1:119527597002:image/sagemaker-data-wrangler-1.0"      
+    ap-southeast-2:
+      datascience: "arn:aws:sagemaker:ap-southeast-2:452832661640:image/datascience-1.0"
+      datawrangler: "arn:aws:sagemaker:ap-southeast-2:422173101802:image/sagemaker-data-wrangler-1.0"
+    ap-northeast-1: 
+      datascience: "arn:aws:sagemaker:ap-northeast-1:102112518831:image/datascience-1.0"
+      datawrangler: "arn:aws:sagemaker:ap-northeast-1:649008135260:image/sagemaker-data-wrangler-1.0"
+    ca-central-1:
+      datascience: "arn:aws:sagemaker:ca-central-1:310906938811:image/datascience-1.0"
+      datawrangler: "arn:aws:sagemaker:ca-central-1:557239378090:image/sagemaker-data-wrangler-1.0"
+    eu-central-1: 
+      datascience: "arn:aws:sagemaker:eu-central-1:936697816551:image/datascience-1.0"
+      datawrangler: "arn:aws:sagemaker:eu-central-1:024640144536:image/sagemaker-data-wrangler-1.0"
+    eu-west-1:
+      datascience: "arn:aws:sagemaker:eu-west-1:470317259841:image/datascience-1.0"
+      datawrangler: "arn:aws:sagemaker:eu-west-1:245179582081:image/sagemaker-data-wrangler-1.0"
+    eu-west-2:
+      datascience: "arn:aws:sagemaker:eu-west-2:712779665605:image/datascience-1.0"
+      datawrangler: "arn:aws:sagemaker:eu-west-2:894491911112:image/sagemaker-data-wrangler-1.0"
+    eu-west-3:
+      datascience: "arn:aws:sagemaker:eu-west-3:615547856133:image/datascience-1.0"
+      datawrangler: "arn:aws:sagemaker:eu-west-3:807237891255:image/sagemaker-data-wrangler-1.0"
+    eu-north-1:
+      datascience: "arn:aws:sagemaker:eu-north-1:243637512696:image/datascience-1.0"
+      datawrangler: "arn:aws:sagemaker:eu-north-1:054986407534:image/sagemaker-data-wrangler-1.0"
+    eu-south-1:
+      datascience: "arn:aws:sagemaker:eu-south-1:488287956546:image/sagemaker-data-wrangler-1.0"
+      datawrangler: "arn:aws:sagemaker:eu-south-1:592751261982:image/datascience-1.0"
+    sa-east-1:
+      datascience: "arn:aws:sagemaker:sa-east-1:782484402741:image/datascience-1.0"
+      datawrangler: "arn:aws:sagemaker:sa-east-1:424196993095:image/sagemaker-data-wrangler-1.0"
+
 Parameters:
   DomainName:
     Type: String
   UserProfileName:
     Type: String
-  VpcId:
+  ProjectName:
     Type: String
+    Default: sagemaker-studio-vpc-firewall
+  VPCId:
+    Type: AWS::EC2::VPC::Id
+    Description: Choose a VPC for SageMaker Studio and SageMaker workloads
   SageMakerStudioSubnetIds:
-    Type: String
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Choose subnets
   SageMakerSecurityGroupIds:
-    Type: String
+    Type: List<AWS::EC2::SecurityGroup::Id>
+    Description: Choose security groups for SageMaker Studio and SageMaker workloads
   SageMakerExecutionRoleArn:
     Type: String
-  
+  SageMakerStudioStorageKMSKeyId:
+    Type: String
+    Description: SageMaker uses an AWS KMS key to encrypt your EFS and EBS file systems by default. To use a customer managed key, enter its key Id.
+    Default: ''
+  NetworkAccessType:
+    Type: String
+    AllowedValues:
+      - 'PublicInternetOnly'
+      - 'VpcOnly'
+    Description: Choose how SageMaker Studio accesses resources over the Network
+    Default: 'VpcOnly'
+  AuthMode:
+    Type: String
+    AllowedValues:
+      - 'IAM'
+      - 'SSO'
+    Description: The mode of authentication that members use to access the domain
+    Default: 'IAM'
+  StartKernelGatewayApps:
+    Type: String
+    Description: Start the KernelGateway Apps (Data Science and Data Wrangler)
+    AllowedValues:
+      - 'YES'
+      - 'NO'
+    Default: 'NO'
+
+Conditions:
+  SageMakerEFSKMSKeyCondition: !Not [ !Equals [ !Ref SageMakerStudioStorageKMSKeyId, ''] ]
+  KernelGatewayAppsCondition: !Equals [ !Ref StartKernelGatewayApps, 'YES' ]
+
 Resources:
-# Custom resources to create SageMaker Studio domain and user profile
+  SageMakerStudioDomain:
+    Type: AWS::SageMaker::Domain
+    Properties: 
+      AppNetworkAccessType: !Ref NetworkAccessType
+      AuthMode: !Ref AuthMode
+      DefaultUserSettings: 
+          ExecutionRole: !Ref SageMakerExecutionRoleArn
+          SecurityGroups: !Ref SageMakerSecurityGroupIds
+      DomainName: !Ref DomainName 
+      KmsKeyId: !If [ SageMakerEFSKMSKeyCondition, !Ref SageMakerStudioStorageKMSKeyId, !Ref 'AWS::NoValue' ]
+      SubnetIds: !Ref SageMakerStudioSubnetIds
+      VpcId: !Ref VPCId
+      Tags:
+        - Key: ProjectName
+          Value: !Ref ProjectName
 
-  LambdaExecutionRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service:
-                - lambda.amazonaws.com
-            Action:
-              - sts:AssumeRole
-      Path: /
-      Policies:
-        - PolicyName: root
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Sid: CloudWatchLogsPermissions
-                Effect: Allow
-                Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource: !Sub "arn:${AWS::Partition}:logs:*:*:*"
-              - Sid: SageMakerDomainPermission
-                Effect: Allow
-                Action:
-                  - sagemaker:CreateDomain
-                  - sagemaker:DescribeDomain
-                  - sagemaker:DeleteDomain
-                  - sagemaker:UpdateDomain
-                  - sagemaker:CreateUserProfile
-                  - sagemaker:UpdateUserProfile
-                  - sagemaker:DeleteUserProfile
-                  - sagemaker:DescribeUserProfile
-                  - sagemaker:ListApps
-                  - sagemaker:DeleteApp
-                Resource:
-                  - !Sub "arn:${AWS::Partition}:sagemaker:${AWS::Region}:${AWS::AccountId}:domain/*"
-                  - !Sub "arn:${AWS::Partition}:sagemaker:${AWS::Region}:${AWS::AccountId}:user-profile/*"
-                  - !Sub "arn:${AWS::Partition}:sagemaker:${AWS::Region}:${AWS::AccountId}:app/*"
-              - Sid: SageMakerExecPassRole
-                Effect: Allow
-                Action:
-                  - iam:PassRole
-                Resource: !Ref SageMakerExecutionRoleArn
-
-  SageMakerDomainLambda:
-      Type: "AWS::Lambda::Function"
-      DependsOn:
-        - LambdaExecutionRole
-      Properties:
-        Code:
-          ZipFile: !Sub |
-            import time
-            import boto3
-            import logging
-            import cfnresponse
-            from botocore.exceptions import ClientError
-
-            sm_client = boto3.client('sagemaker')
-            logger = logging.getLogger(__name__)
-
-            SAGEMAKER_DOMAIN_AUTH_MODE = 'IAM'
-            SAGEMAKER_NETWORK_ACCESS_TYPE = 'VpcOnly'
-            SAGEMAKER_EFS_RETENTION_POLICY = 'Delete'
-
-            def delete_domain(domain_id):
-                try:
-                    sm_client.describe_domain(DomainId=domain_id)
-                except:
-                    return
-
-                sm_client.delete_domain(DomainId=domain_id,RetentionPolicy={'HomeEfsFileSystem': SAGEMAKER_EFS_RETENTION_POLICY})
-
-                try:
-                    while sm_client.describe_domain(DomainId=domain_id):
-                        time.sleep(5)
-                except ClientError as error:
-                    if error.response['Error']['Code'] == 'ResourceNotFound':
-                        logger.info(f'SageMaker domain {domain_id} has been deleted')
-                        return
-
-            def handler(event, context):
-                response_data = {}
-                physicalResourceId = event.get('PhysicalResourceId')
-                config = event.get('ResourceProperties')
-
-                try:
-                    if event['RequestType'] in ['Create', 'Update']:
-                        if event['RequestType'] == 'Create':
-                            physicalResourceId = sm_client.create_domain(
-                                            DomainName=config['DomainName'],
-                                            AuthMode=SAGEMAKER_DOMAIN_AUTH_MODE,
-                                            DefaultUserSettings=config['DefaultUserSettings'],
-                                            SubnetIds=config['SageMakerStudioSubnetIds'].split(','),
-                                            VpcId=config['VpcId'],
-                                            AppNetworkAccessType=SAGEMAKER_NETWORK_ACCESS_TYPE
-                                        )['DomainArn'].split('/')[-1]
-
-                            logger.info(f'Created SageMaker Studio Domain:{physicalResourceId}')
-                        else:
-                            sm_client.update_domain(DomainId=physicalResourceId, DefaultUserSettings=config['DefaultUserSettings'])
-
-                        while sm_client.describe_domain(DomainId=physicalResourceId)['Status'] != 'InService':
-                            time.sleep(5)
-
-                        response_data = {'DomainId': physicalResourceId}
-
-                    elif event['RequestType'] == 'Delete':
-                        delete_domain(physicalResourceId)
-
-                    cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data, physicalResourceId=physicalResourceId)
-
-                except ClientError as exception:
-                    logging.error(exception)
-                    cfnresponse.send(event, context, cfnresponse.FAILED, response_data, physicalResourceId=physicalResourceId, reason=str(exception))
-        Description: Creates, updates or deletes SageMaker domain
-        Handler: index.handler
-        MemorySize: 128
-        Role: !GetAtt LambdaExecutionRole.Arn
-        Runtime: python3.8
-        Timeout: 900
-
-  UserProfileLambda:
-      Type: "AWS::Lambda::Function"
-      DependsOn:
-        - LambdaExecutionRole
-        - SageMakerDomainLambdaInvoke
-      Properties:
-        Code:
-          ZipFile: !Sub |
-            import time
-            import boto3
-            import logging
-            import cfnresponse
-            from botocore.exceptions import ClientError
-
-            sm_client = boto3.client('sagemaker')
-            logger = logging.getLogger(__name__)
-
-            def delete_user_profile(config):    
-                domain_id = config['DomainId']
-                user_profile_name = config['UserProfileName']
-                logging.info(f'Start deleting user profile: {user_profile_name}')
-
-                try:
-                    sm_client.describe_user_profile(DomainId=domain_id, UserProfileName=user_profile_name)
-                except:
-                    logging.info(f'Cannot retrieve {user_profile_name}')
-                    return
-
-                for p in sm_client.get_paginator('list_apps').paginate(DomainIdEquals=domain_id, UserProfileNameEquals=user_profile_name):
-                    for a in p['Apps']:
-                        if a['Status'] != 'Deleted':
-                            sm_client.delete_app(DomainId=a['DomainId'], UserProfileName=a['UserProfileName'], AppType=a['AppType'], AppName=a['AppName'])
-                    
-                apps = 1
-                while apps:
-                    apps = 0
-                    for p in sm_client.get_paginator('list_apps').paginate(DomainIdEquals=domain_id, UserProfileNameEquals=user_profile_name):
-                        apps += len([a['AppName'] for a in p['Apps'] if a['Status'] != 'Deleted'])
-                    logging.info(f'Number of active apps: {str(apps)}')
-                    time.sleep(5)
-
-                sm_client.delete_user_profile(DomainId=domain_id, UserProfileName=user_profile_name)
-
-                try:
-                    while sm_client.describe_user_profile(DomainId=domain_id, UserProfileName=user_profile_name):
-                        time.sleep(5)
-                except ClientError as error:
-                    if error.response['Error']['Code'] == 'ResourceNotFound':
-                        logger.info(f'{user_profile_name} deleted')
-                        return
-
-            def handler(event, context):
-                response_data = {}
-                physicalResourceId = event.get('PhysicalResourceId')
-                config = event.get('ResourceProperties')
-
-                try:
-                    if event['RequestType'] in ['Create', 'Update']:
-                        f = sm_client.update_user_profile
-                        if event['RequestType'] == 'Create':
-                            f = sm_client.create_user_profile
-
-                        response = f(DomainId=config['DomainId'], UserProfileName=config['UserProfileName'], UserSettings=config['UserSettings'])
-
-                        while response.get('Status') != 'InService':
-                            response = sm_client.describe_user_profile(DomainId=config['DomainId'], UserProfileName=config['UserProfileName'])
-                            time.sleep(5)
-                        
-                        response_data = {'UserProfileName':response['UserProfileName']}
-                        physicalResourceId = response['UserProfileName']
-              
-                    elif event['RequestType'] == 'Delete':        
-                        delete_user_profile(config)
-
-                    cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data, physicalResourceId=physicalResourceId)
-
-                except ClientError as exception:
-                    logging.error(exception)
-                    cfnresponse.send(event, context, cfnresponse.FAILED, response_data, physicalResourceId=physicalResourceId, reason=str(exception))
-        Description: Creates, udpates or deletes SageMaker user profile
-        Handler: index.handler
-        MemorySize: 128
-        Role: !GetAtt LambdaExecutionRole.Arn
-        Runtime: python3.8
-        Timeout: 900
-
-  SageMakerDomainLambdaInvoke:
-    Type: Custom::LambdaInvoke
-    DependsOn:
-      - SageMakerDomainLambda
-    Properties:
-      ServiceToken: !GetAtt SageMakerDomainLambda.Arn
-      DomainName: !Ref DomainName
-      VpcId: !Ref VpcId
-      SageMakerStudioSubnetIds: !Ref SageMakerStudioSubnetIds
-      DefaultUserSettings:
-        SecurityGroups: 
-          - !Ref SageMakerSecurityGroupIds
-        ExecutionRole: !Ref SageMakerExecutionRoleArn
-  
-  UserProfileLambdaInvoke:
-    Type: Custom::LambdaInvoke
-    DependsOn:
-      - UserProfileLambda
-    Properties:
-      ServiceToken: !GetAtt UserProfileLambda.Arn
+  SageMakerUserProfile:
+    Type: AWS::SageMaker::UserProfile
+    Properties: 
+      DomainId: !GetAtt SageMakerStudioDomain.DomainId
       UserProfileName: !Ref UserProfileName
-      DomainId: !GetAtt SageMakerDomainLambdaInvoke.DomainId
       UserSettings:
         ExecutionRole: !Ref SageMakerExecutionRoleArn
+        SecurityGroups: !Ref SageMakerSecurityGroupIds
+      Tags:
+        - Key: ProjectName
+          Value: !Ref ProjectName
+
+  JupyterApp:
+    Type: AWS::SageMaker::App
+    DependsOn: SageMakerUserProfile
+    Properties: 
+      AppName: default
+      AppType: JupyterServer
+      DomainId: !GetAtt SageMakerStudioDomain.DomainId
+      UserProfileName: !Ref UserProfileName
+
+  DataScienceApp:
+    Type: AWS::SageMaker::App
+    DependsOn: SageMakerUserProfile
+    Condition: KernelGatewayAppsCondition
+    Properties: 
+      AppName: instance-event-engine-datascience-ml-t3-medium
+      AppType: KernelGateway
+      DomainId: !GetAtt SageMakerStudioDomain.DomainId
+      ResourceSpec: 
+        InstanceType:  ml.t3.medium
+        SageMakerImageArn: !FindInMap
+          - RegionMap
+          - !Ref 'AWS::Region'
+          - datascience
+      UserProfileName: !Ref UserProfileName
+
+  DataWranglerApp:
+    Type: AWS::SageMaker::App
+    DependsOn: SageMakerUserProfile
+    Condition: KernelGatewayAppsCondition
+    Properties: 
+      AppName: instance-event-engine-datawrangler-ml-m5-4xlarge
+      AppType: KernelGateway
+      DomainId: !GetAtt SageMakerStudioDomain.DomainId
+      ResourceSpec: 
+        InstanceType:  ml.m5.4xlarge
+        SageMakerImageArn: !FindInMap
+          - RegionMap
+          - !Ref 'AWS::Region'
+          - datawrangler
+      UserProfileName: !Ref UserProfileName
 
 Outputs:
   SageMakerStudioDomainId:
     Description: SageMaker Studio domain id
-    Value: !GetAtt SageMakerDomainLambdaInvoke.DomainId
+    Value: !GetAtt SageMakerStudioDomain.DomainId
   UserProfileName:
     Description: SageMaker user profile name
     Value: !Ref UserProfileName

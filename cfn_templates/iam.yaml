@@ -13,10 +13,10 @@ Parameters:
     Type: String
   KMSAlias:
     Type: String
-    Default: sagemaker-demo-kms
+    Default: sagemaker-anfw-kms
 
 Resources:
-  SageMakerNotebookInstancePolicy:
+  SageMakerExecutionPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
       Description: SageMaker Notebook restricted access
@@ -125,7 +125,7 @@ Resources:
               - ec2:DescribeVpcEndpoints
             Resource: '*'
 
-  SageMakerNotebookInstanceRole:
+  SageMakerExecutionRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -136,9 +136,9 @@ Resources:
               Service: sagemaker.amazonaws.com
             Action: sts:AssumeRole
       Path: /
-      RoleName: !Sub ${ProjectName}-${AWS::Region}-notebook-role
+      RoleName: !Sub ${ProjectName}-${AWS::Region}-sagemaker-execution-role
       ManagedPolicyArns:
-        - !Ref SageMakerNotebookInstancePolicy
+        - !Ref SageMakerExecutionPolicy
 #        - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess
 
   KMSKey:
@@ -184,7 +184,7 @@ Resources:
 
 Outputs:
   ExecutionRoleArn:
-    Value: !GetAtt SageMakerNotebookInstanceRole.Arn
+    Value: !GetAtt SageMakerExecutionRole.Arn
   KMSKeyArn:
     Description: KMS CMK arn for SageMaker notebooks EBS encryption
     Value: !GetAtt KMSKey.Arn

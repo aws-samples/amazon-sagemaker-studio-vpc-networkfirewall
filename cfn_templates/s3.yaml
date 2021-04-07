@@ -33,7 +33,7 @@ Resources:
             Action:
               - 'kms:Encrypt'
               - 'kms:Decrypt'
-              - 'kms:ReEncrypt'
+              - 'kms:ReEncrypt*'
               - 'kms:GenerateDataKey'
               - 'kms:DescribeKey'
             Resource: '*'

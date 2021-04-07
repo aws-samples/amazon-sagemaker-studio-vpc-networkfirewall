@@ -2,12 +2,12 @@
 # SPDX-License-Identifier: MIT-0
 
 AWSTemplateFormatVersion: 2010-09-09
-Description: Creates a VPC with no internet gateway, one private subnet, and one network firewall private subnet.
+Description: Creates a VPC with one internet gateway, one private subnet, and one network firewall private subnet.
 
 Parameters:
   ProjectName:
     Type: String
-  VpcCIDR:
+  VPCCIDR:
     Type: String
     AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
   FirewallSubnetCIDR:
@@ -26,10 +26,16 @@ Parameters:
   
 Resources:
   # VPC and subnets
+
+  # Set DeletionPolicy to 'Retain'
+  # SageMaker Studio creates an EFS file system with mounting points in VPC and does not delete that file system on deletion of SageMaker Studio
+  # This EFS cause the CloudFormation deletion process for VPC template to fail
   VPC:
     Type: AWS::EC2::VPC
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
     Properties:
-      CidrBlock: !Ref VpcCIDR
+      CidrBlock: !Ref VPCCIDR
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
@@ -58,6 +64,8 @@ Resources:
 
   SageMakerStudioSubnet:
     Type: AWS::EC2::Subnet
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Delete
     Properties:
       CidrBlock: !Ref SageMakerStudioSubnetCIDR
       VpcId: !Ref VPC
@@ -73,9 +81,10 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub sg-${ProjectName}-sagemaker
+          Value: !Sub sg-sagemaker-${ProjectName}
 
-  SecurityGroupIngress:
+  # Self-referencing the security group to enable communication between intances within the same SG
+  SageMakerSecurityGroupIngress:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
       IpProtocol: '-1'
@@ -88,10 +97,10 @@ Resources:
    Properties:
       Domain: vpc
 
-  DomainDenyStatefulRuleGroup:
+  DomainAllowStatefulRuleGroup:
     Type: AWS::NetworkFirewall::RuleGroup
     Properties:
-      RuleGroupName: !Sub "domain-deny-${ProjectName}"
+      RuleGroupName: !Sub "domain-allow-${ProjectName}"
       Type: STATEFUL
       Capacity: 100
       RuleGroup:
@@ -99,7 +108,7 @@ Resources:
           IPSets:
             HOME_NET:
               Definition:
-                - !Ref VpcCIDR
+                - !Ref VPCCIDR
         RulesSource:
           RulesSourceList:
             TargetTypes:
@@ -107,10 +116,10 @@ Resources:
               - TLS_SNI
             Targets: 
               - ".kaggle.com"
-            GeneratedRulesType: "DENYLIST"
+            GeneratedRulesType: "ALLOWLIST"
       Tags:
         - Key: Name
-          Value: !Sub "domain-deny-${ProjectName}"   
+          Value: !Sub "domain-allow-${ProjectName}"   
 
   FirewallPolicy:
     Type: AWS::NetworkFirewall::FirewallPolicy
@@ -123,7 +132,7 @@ Resources:
         StatelessFragmentDefaultActions: 
             - "aws:pass"
         StatefulRuleGroupReferences:
-          - ResourceArn: !Ref DomainDenyStatefulRuleGroup
+          - ResourceArn: !Ref DomainAllowStatefulRuleGroup
 
   IGW:
     Type: AWS::EC2::InternetGateway
@@ -134,7 +143,6 @@ Resources:
 
   NatGateway:
     Type: AWS::EC2::NatGateway
-    DependsOn: EIP
     Properties: 
       AllocationId: !GetAtt EIP.AllocationId
       SubnetId: !Ref NATGatewaySubnet
@@ -144,9 +152,6 @@ Resources:
 
   NetworkFirewall:
     Type: AWS::NetworkFirewall::Firewall
-    DependsOn: 
-      - FirewallSubnet
-      - FirewallPolicy
     Properties: 
       DeleteProtection: false
       Description: AWS Network Firewall to control internet ergress and ingress
@@ -160,7 +165,6 @@ Resources:
 
   IGWVPCAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
-    DependsOn: IGW
     Properties:
       VpcId: !Ref VPC
       InternetGatewayId: !Ref IGW
@@ -201,7 +205,6 @@ Resources:
   # Route table associations
   IGWRouteTableAssociation:
     Type: AWS::EC2::GatewayRouteTableAssociation
-    DependsOn: IGW
     Properties:
       RouteTableId: !Ref IGWIngressRouteTable
       GatewayId: !Ref IGW
@@ -229,7 +232,6 @@ Resources:
   # This will not work in multi-AZ setup!
   IGWIngressRoute:
     Type: AWS::EC2::Route
-    DependsOn: NetworkFirewall
     Properties:
       RouteTableId: !Ref IGWIngressRouteTable
       DestinationCidrBlock: !Ref NATGatewaySubnetCIDR
@@ -237,7 +239,6 @@ Resources:
 
   FirewallEgressRoute:
     Type: AWS::EC2::Route
-    DependsOn: IGW
     Properties:
       RouteTableId: !Ref FirewallRouteTable
       DestinationCidrBlock: 0.0.0.0/0
@@ -247,7 +248,6 @@ Resources:
   # This will not work in multi-AZ setup!
   NATGatewayEgressRoute:
     Type: AWS::EC2::Route
-    DependsOn: NetworkFirewall
     Properties:
       RouteTableId: !Ref NATGatewayRouteTable
       DestinationCidrBlock: 0.0.0.0/0
@@ -255,30 +255,29 @@ Resources:
 
   SageMakerEgressRoute:
     Type: AWS::EC2::Route
-    DependsOn: NatGateway
     Properties:
       RouteTableId: !Ref SageMakerStudioRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NatGateway
   
   # VPC Endpoints
-  VPCEndpointSecurityGroup:
+  VPCEndpointsSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Allow TLS for VPC Endpoint
       VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !GetAtt SageMakerSecurityGroup.GroupId
+
+        - IpProtocol: '-1'
+          CidrIp: !Ref 'VPCCIDR'
+          Description: Allow all traffic from the VPC
       Tags:
         - Key: Name
-          Value: !Sub sg-${ProjectName}-endpoint
-
-  EndpointSecurityGroupIngress:
-    Type: AWS::EC2::SecurityGroupIngress
-    Properties:
-      IpProtocol: tcp
-      FromPort: 443
-      ToPort: 443
-      GroupId: !Ref VPCEndpointSecurityGroup
-      SourceSecurityGroupId: !Ref SageMakerSecurityGroup
+          Value: !Sub sg-vpce-${ProjectName}
 
   VPCEndpointS3:
     Type: AWS::EC2::VPCEndpoint
@@ -331,7 +330,7 @@ Resources:
       SubnetIds:
         - !Ref SageMakerStudioSubnet
       SecurityGroupIds:
-        - !Ref VPCEndpointSecurityGroup
+        - !Ref VPCEndpointsSecurityGroup
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.sagemaker.api'
       VpcId: !Ref VPC
 
@@ -350,7 +349,7 @@ Resources:
       SubnetIds:
         - !Ref SageMakerStudioSubnet
       SecurityGroupIds:
-        - !Ref VPCEndpointSecurityGroup
+        - !Ref VPCEndpointsSecurityGroup
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.sagemaker.runtime'
       VpcId: !Ref VPC
 
@@ -369,7 +368,7 @@ Resources:
       SubnetIds:
         - !Ref SageMakerStudioSubnet
       SecurityGroupIds:
-        - !Ref VPCEndpointSecurityGroup
+        - !Ref VPCEndpointsSecurityGroup
       ServiceName: !Sub 'aws.sagemaker.${AWS::Region}.notebook'
       VpcId: !Ref VPC
 
@@ -388,7 +387,7 @@ Resources:
       SubnetIds:
         - !Ref SageMakerStudioSubnet
       SecurityGroupIds:
-        - !Ref VPCEndpointSecurityGroup
+        - !Ref VPCEndpointsSecurityGroup
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.sts'
       VpcId: !Ref VPC
 
@@ -400,7 +399,7 @@ Resources:
       SubnetIds:
         - !Ref SageMakerStudioSubnet
       SecurityGroupIds:
-        - !Ref VPCEndpointSecurityGroup
+        - !Ref VPCEndpointsSecurityGroup
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ssm'
       VpcId: !Ref VPC
 
@@ -419,7 +418,7 @@ Resources:
       SubnetIds:
         - !Ref SageMakerStudioSubnet
       SecurityGroupIds:
-        - !Ref VPCEndpointSecurityGroup
+        - !Ref VPCEndpointsSecurityGroup
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.monitoring'
       VpcId: !Ref VPC
 
@@ -438,7 +437,7 @@ Resources:
       SubnetIds:
         - !Ref SageMakerStudioSubnet
       SecurityGroupIds:
-        - !Ref VPCEndpointSecurityGroup
+        - !Ref VPCEndpointsSecurityGroup
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.logs'
       VpcId: !Ref VPC
 
@@ -457,7 +456,7 @@ Resources:
       SubnetIds:
         - !Ref SageMakerStudioSubnet
       SecurityGroupIds:
-        - !Ref VPCEndpointSecurityGroup
+        - !Ref VPCEndpointsSecurityGroup
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ecr.dkr'
       VpcId: !Ref VPC
 
@@ -476,7 +475,7 @@ Resources:
       SubnetIds:
         - !Ref SageMakerStudioSubnet
       SecurityGroupIds:
-        - !Ref VPCEndpointSecurityGroup
+        - !Ref VPCEndpointsSecurityGroup
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ecr.api'
       VpcId: !Ref VPC
 

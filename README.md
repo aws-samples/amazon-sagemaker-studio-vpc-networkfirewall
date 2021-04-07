@@ -222,6 +222,31 @@ Security-specific examples of the condition keys:
 - `sagemaker:VolumeKmsKey`
 - `sagemaker:OutputKmsKey`
 
+### Example: Enforce usage of network isolation mode
+To enforce usage of resource secure configuration, you can add the following policy to the SageMaker excecution role:
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Deny",
+            "Action": [
+                "sagemaker:Create*"
+            ],
+            "Resource": "*",
+            "Condition": {
+                "StringNotEqualsIfExists": {
+                    "sagemaker:NetworkIsolation": "true"
+                }
+            }
+        }
+    ]
+}
+```
+
+The policy denies creation of any component (processing or traning job, endpoint, transform job) if the `sagemaker:NetworkIsolation` parameter is not set to `true`. This applies only to the components which have this parameter.
+Similarly you can add validation of any other SageMaker service-specific condition keys.
+
 ### AWS Service Catalog approach
 Based on pre-defined CloudFormation templates to provision requested resources.
 
@@ -244,7 +269,7 @@ The solution implements the following setup to demonstrate the usage of SageMake
 
 ![Amazon SageMaker Studio infrastructure overview](design/sagemaker-studio-vpc.drawio.svg)
 
-❗ The solution uses **only one availability zone (AZ)** and is not highly-available. We do not recommend to use the single-AZ setup for any production deployment. The HA solution can be implemented by duplicating the single-AZ setup (subnets, NAT Gateway, Network Firewall VPC endpoints) to additional AZs.  
+❗ The solution uses **only one availability zone (AZ)** and is not highly-available. We do not recommend to use the single-AZ setup for any production deployment. The HA solution can be implemented by duplicating the single-AZ setup (subnets, NAT Gateway, Network Firewall endpoints) to additional AZs.  
 ❗ The CloudFormation template will setup the Network Firewall routes automatically. However, the current implementation works only with single-AZ deployment:
 ```yaml
 VpcEndpointId: !Select ["1", !Split [":", !Select ["0", !GetAtt NetworkFirewall.EndpointIds]]]
@@ -300,22 +325,22 @@ The solution creates:
 - An IAM user or role with administrative access
 - configured `aws cli` with that IAM user, role credentials, or temporary credentials
 - An Amazon S3 bucket in your account in the same region where you deploy the solution (or you can create one as described below)
-- You deployment region is `us-east-1`, `us-west-2`, `eu-west-1`, or `ap-southeast-2`. AWS Network Firewall is [available](https://aws.amazon.com/network-firewall/faqs/) in the US East (N. Virginia), US West (Oregon), Europe (Ireland), and Asia Pacific (Sydney) regions
+- Your deployment region is `us-east-1`, `us-east-2`, `us-west-2`, `eu-west-1`, `eu-central-1`, `eu-north-1`, `ap-southeast-2`, or `ap-northeast-1`. AWS Network Firewall is [available](https://aws.amazon.com/network-firewall/faqs/) in the US East (N. Virginia, Ohio), US West (Oregon), Europe (Ireland, Frankfurt, Stockholm), and Asia Pacific (Sydney, Tokyo) regions
   
 ❗ For CloudFormation template deployment you must use the S3 bucket in the **same region** as your deployment region.
 If you need to deploy the solution in multiple regions, you need to create a bucket per region and specify the corresponding bucket name in the `make deploy` call as shown below.
   
-❗ The solution will successfully deploy AWS Network Firewall only in `us-east-1`, `us-west-2`, `eu-west-1`, or `ap-southeast-2` regions because of the Network Firewall availability. In all other regions you will get a CloudFormation validation exception.
+❗ The solution will successfully deploy AWS Network Firewall only in the regions where the Network Firewall is available. In all other regions you will get a CloudFormation validation exception.
   
-❗ If you have already one or more SageMaker domains in the current region deployed, please check your service quota and make sure you can deploy one more SageMaker domain. The deployment will fail if you exceed your quota on the SageMaker domains.
+❗ If you have already one SageMaker domains in the current region deployed, the deployment will fail because there is limit of one SageMaker domain per region per AWS account.
 
 ## CloudFormation stack parameters
 There are no required parameters. All parameters have default values. You may want to change the `DomainName` or `*CIDR` parameters to avoid naming conflict with the existing resources and CIDR allocations.
 
-- `ProjectName`: **OPTONAL**. Default is `sagemaker-studio-vpc`
-- `DomainName`: **OPTIONAL**: SageMaker domain name. Default is `sagemaker-demo-domain-<region>`  
-- `UserProfileName`: **OPTIONAL**: User profile name for the SageMaker domain. Default is `demouser-profile-<region>`
-- `VpcCIDR`: **OPTONAL**. Default is 10.2.0.0/16
+- `ProjectName`: **OPTONAL**. Default is `sagemaker-studio-anfw`
+- `DomainName`: **OPTIONAL**: SageMaker domain name. Default is `sagemaker-anfw-domain-<region>`  
+- `UserProfileName`: **OPTIONAL**: User profile name for the SageMaker domain. Default is `anfw-user-profile-<region>`
+- `VPCCIDR`: **OPTONAL**. Default is 10.2.0.0/16
 - `FirewallSubnetCIDR`: **OPTONAL**. Default is 10.2.1.0/24
 - `NATGatewaySubnetCIDR`: **OPTONAL**. Default is 10.2.2.0/24
 - `SageMakerStudioSubnetCIDR`: **OPTONAL**. Default is 10.2.3.0/24
@@ -328,8 +353,14 @@ You can change the stack parameters in the `Makefile` or pass them as variable a
 
 To deploy the stack into the **current account and region** please complete the following steps.
 
+### Clone the GitHub repository
+```bash
+git clone https://github.com/aws-samples/amazon-sagemaker-studio-vpc-networkfirewall.git
+cd amazon-sagemaker-studio-vpc-networkfirewall
+```
+
 ### Create a S3 bucket
-You need a S3 bucket for CloudFormation deployment. If you don't have a S3 bucket in the current region, you can create one via the `aws cli`:
+You need a S3 bucket for CloudFormation deployment. If you don't have a S3 bucket in the **current region**, you can create one via the `aws cli`:
 ```bash
 aws s3 mb s3://<your s3 bucket name>
 ```
@@ -422,65 +453,56 @@ Now add the follwing statement to the S3 VPC endpoint policy:
     }
 ```
 
+Command line:
+```bash
+VPCE_ID=
+POLICY_FILE_NAME=
+
+aws ec2 modify-vpc-endpoint \
+    --vpc-endpoint-id $VPCE_ID \
+    --policy-document file://$POLICY_FILE_NAME
+```
+
 - Refresh the JumpPage start page - now you have access to all JumpStart resources
 
 We have seen now, that you can control access to S3 buckets via combination of S3 bucket policy and S3 Endpoint policy.
 
-## Internet access
-Here we show how the internet inbound or outbound access can be controled with AWS Network Firewall.
-
-The solution deploys a [network firewall policy](https://docs.aws.amazon.com/network-firewall/latest/developerguide/firewall-policies.html) with a stateful rule group with a deny domain list. This policy is attached to the network firewall.
-All inbound and outbound internet traffic is allowed now, except for `.kaggle.com` domain, which is on the deny list.
-First, we try to access the `https://kaggle.com/`.   
-- Open the same or a new notebook in the SageMaker Studio and try to download the front page from `kaggle.com`:
-```
-!wget https://kaggle.com/
-```
-The request will timeout as the domain is restricted and users cannot connect to this domain from any SageMaker Studio notebooks.
-
-Now we restrict access to another domain name:
-
-- go to the SageMaker Studio notebook and try to clone any public github repository:
-```
-!git clone <https-path connection string>
-```
-- the operation must be successful
-- go to Firewall Polices in AWS VPC console and select `network-firewall-policy-<ProjectName>` policy. Edit the `domain-deny-<ProjectName>` stateful rule group and add `.github.com` to the domain list field: 
-
-![Firewall policy rule group](design/firewall-policy-rule-group-setup.png)
-Check that the Action is set to `Deny`.
-
-Now the domain name `.github.com` is on the deny-list. Any inbound our outbound traffic from this domain will be dropped.
-
-- now try to clone any github repository in the notebook instance:
-```
-!git clone <https-path connection string>
-```
-- the operation will timeout this time - the access to the `.github.com` domain is blocked by the network firewall
-
-You can create any other stateless or stateful rules and implement traffic filtering based on a classical 5-tuple (protocol, source IP, source port, destination IP, destination port) by creating and enabling new [firewall policy rule groups](https://docs.aws.amazon.com/network-firewall/latest/developerguide/firewall-policies.html).
-
-You can also add another network security layer by using the SageMaker security group or a [Network ACL](https://docs.aws.amazon.com/vpc/latest/userguide/vpc-network-acls.html) with specific inbould and outbound rules. 
+## Controlling internet access
+This [blog post](link) shows how the internet ingress and egress for SageMaker Studio can be controled with AWS Network Firewall.
 
 # Clean up
 This operation will delete the whole stack together with SageMaker Studio Domain and user profile.
 
-❗ All notebooks volumes, and all EFS home directories will be deleted as well - no user data will be preserved upon stack deletion.
-
 1. Exit all instances SageMaker Studio.
-2. Delete the stack:
+2. Check if KernelGateway is running (in the SageMaker Studio control panel in AWS Console). If yes, delete KernelGateway and wait until the deletion process finishes
+3. If you enable logging configuration for Network Firewall, remove it from the Firewall Details (AWS Console)
+4. If you change the stateful rule group in the firewall policy, delete all added domain names leaving only the original name (`.kaggle.com`)
+5. Delete the stack:
 ```bash
 make delete
 ```
 
 Alternatively you can delete the stack from the AWS CloudFormation console.
 
+## Delete left-over resources
+The deployment of Amazon SageMaker Studio creates a new EFS file system in your account. When you delete the data science enviroment stack, the SageMaker Studio domain, user profile and Apps are also deleted. However, the EFS file system **will not be deleted** and kept "as is" in your account (EFS file system contains home directories for SageMaker Studio users and may contain your data). Additional resources are created by SageMaker Studio and retained upon deletion together with the EFS file system:
+- EFS mounting points in each private subnet of your VPC
+- ENI for each mounting point
+- Security groups for EFS inbound and outbound traffic
+
+❗ To delete the EFS file system and EFS-related resources in your AWS account created by the deployment of this solution, do the following steps **after** after deletion of CloudFormation stack.
+
+❗ **This is a destructive action. All data on the EFS file system will be deleted (SageMaker home directories). You may want to backup the EFS file system before deletion**
+
+From AWS console:  
+- Go to the EFS console and delete all mounting points in all private subnets of the data science VPC for the SageMaker EFS file system
+- delete the SageMaker EFS system. You may want to backup the EFS file system before deletion
+- Go to the VPC console and delete the SageMaker Studio VPC
+
 ## Delete stack troubleshooting
-Sometimes stack might fail to delete. If the `sagemaker-studio-demo` stack deletion fails, check the events in the AWS CloudFormation console.
+Sometimes stack might fail to delete. If stack deletion fails, check the events in the AWS CloudFormation console.
 
-If the deletion of the SageMaker domain fails, check if there are any running applications for the user profile as described in [Delete Amazon SageMaker Studio Domain](https://docs.aws.amazon.com/sagemaker/latest/dg/gs-studio-delete-domain.html). Try to delete the applications and re-run the `make delete` command or delete the stack from AWS CloudFormation console.
-
-If the deletion of the VPC fails, check if there are still any network interfaces (ENI) unreleased by EFS. Delete the EFS and initiate the delete of the `sagemaker-studio-demo` stack again.
+If the deletion of the SageMaker domain fails, check if there are any running applications (e.g. KernelGateway) for the user profile as described in [Delete Amazon SageMaker Studio Domain](https://docs.aws.amazon.com/sagemaker/latest/dg/gs-studio-delete-domain.html). Try to delete the applications and re-run the `make delete` command or delete the stack from AWS CloudFormation console.
 
 # Resources
 [1]. [SageMaker Security](https://docs.aws.amazon.com/sagemaker/latest/dg/security.html)  
@@ -495,6 +517,8 @@ If the deletion of the VPC fails, check if there are still any network interface
 [10]. [Host SageMaker workloads in a private VPC](https://docs.aws.amazon.com/sagemaker/latest/dg/host-vpc.html)  
 [11]. [Understanding Amazon SageMaker notebook instance networking configurations and advanced routing options](https://aws.amazon.com/blogs/machine-learning/understanding-amazon-sagemaker-notebook-instance-networking-configurations-and-advanced-routing-options/)  
 [12]. [Create Amazon SageMaker Studio using AWS CloudFormation](https://aws.amazon.com/blogs/machine-learning/creating-amazon-sagemaker-studio-domains-and-user-profiles-using-aws-cloudformation/)
+[13]. [Building secure machine learning environments with Amazon SageMaker](https://aws.amazon.com/blogs/machine-learning/building-secure-machine-learning-environments-with-amazon-sagemaker/)
+[14]. [Secure Data Science Reference Architecture GitHub](https://github.com/aws-samples/secure-data-science-reference-architecture)
 
 
 # Appendix

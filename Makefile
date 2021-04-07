@@ -11,9 +11,10 @@ FUNCTION_DIR := functions
 # CloudFormation deployment variables
 CFN_ARTEFACT_S3_BUCKET ?= 
 CFN_TEMPLATE_DIR := cfn_templates
-PROJECT_NAME ?= sagemaker-studio-vpc
-SM_DOMAIN_NAME ?= sagemaker-demo-domain
-SM_USER_PROFILE_NAME ?= demouser-profile
+BUILD_DIR := build
+PROJECT_NAME ?= sagemaker-studio-anfw
+SM_DOMAIN_NAME ?= sagemaker-anfw-domain
+SM_USER_PROFILE_NAME ?= anfw-user-profile
 VPC_CIDR ?= 10.2.0.0/16
 FIREWALL_SN_CIDR ?= 10.2.1.0/24
 NAT_GW_SN_CIDR ?= 10.2.2.0/24
@@ -36,17 +37,17 @@ package: build
 	aws cloudformation package \
 		--template-file $(CFN_TEMPLATE_DIR)/sagemaker-studio-vpc.yaml \
 		--s3-bucket $(CFN_ARTEFACT_S3_BUCKET) \
-		--output-template-file $(CFN_TEMPLATE_DIR)/packaged.yaml
+		--output-template-file $(BUILD_DIR)/packaged.yaml
 
 deploy: package
 	aws cloudformation deploy \
-		--template-file $(CFN_TEMPLATE_DIR)/packaged.yaml \
+		--template-file $(BUILD_DIR)/packaged.yaml \
 		--stack-name $(APP_STACK_NAME) \
 		--parameter-overrides \
 		ProjectName=$(PROJECT_NAME) \
 		DomainName=$(SM_DOMAIN_NAME) \
 		UserProfileName=$(SM_USER_PROFILE_NAME) \
-		VpcCIDR=$(VPC_CIDR) \
+		VPCCIDR=$(VPC_CIDR) \
 		FirewallSubnetCIDR=$(FIREWALL_SN_CIDR) \
 		NATGatewaySubnetCIDR=$(NAT_GW_SN_CIDR) \
 		SageMakerStudioSubnetCIDR=$(SAGEMAKER_SN_CIDR) \

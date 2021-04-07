@@ -141,3 +141,5 @@ samconfig.*
 .DS_Store
 .environment
 .not-used-snippets
+
+build/*

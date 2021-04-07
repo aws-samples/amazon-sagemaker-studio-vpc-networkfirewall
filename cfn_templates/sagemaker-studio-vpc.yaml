@@ -7,16 +7,16 @@ Description: "Amazon SageMaker Studio secure deployment demo. The deployment cre
 Parameters:
   ProjectName:
     Type: String
-    Default: sagemaker-studio-vpc
+    Default: sagemaker-studio-vpc-firewall
   DomainName:
     Description: SageMaker domain name
     Type: String
-    Default: sagemaker-demo-domain
+    Default: sagemaker-anfw-domain
   UserProfileName:
     Description: User profile name for the SageMaker domain
     Type: String
-    Default: demouser-profile
-  VpcCIDR:
+    Default: anfw-user-profile
+  VPCCIDR:
     Type: String
     Default: 10.2.0.0/16
   FirewallSubnetCIDR:
@@ -31,10 +31,9 @@ Parameters:
 
 Resources:
 
-  # IAM SageMaker Execution role and KMS CMK for EBS encryption
+  # IAM SageMaker Execution role and KMS key for EBS encryption
   IAM:
     Type: AWS::CloudFormation::Stack
-    DependsOn: S3
     Properties:
       Parameters:
         ProjectName: !Ref ProjectName
@@ -42,10 +41,9 @@ Resources:
         ModelBucketName: !GetAtt S3.Outputs.ModelBucketName
       TemplateURL: iam.yaml
 
-  # S3 buckets (data, model) and bucket policies, KMS CMK for bucket encryption
+  # S3 buckets (data, model) and bucket policies, KMS key for bucket encryption
   S3:
     Type: AWS::CloudFormation::Stack
-    DependsOn: VPC
     Properties:
       Parameters:
         ProjectName: !Ref ProjectName
@@ -59,7 +57,7 @@ Resources:
     Properties:
       Parameters:
         ProjectName: !Ref ProjectName
-        VpcCIDR: !Ref VpcCIDR
+        VPCCIDR: !Ref VPCCIDR
         FirewallSubnetCIDR: !Ref FirewallSubnetCIDR
         NATGatewaySubnetCIDR: !Ref NATGatewaySubnetCIDR
         SageMakerStudioSubnetCIDR: !Ref SageMakerStudioSubnetCIDR
@@ -70,12 +68,12 @@ Resources:
   # SageMaker domain, user profile and pre-signed URL
   SageMakerStudio:
     Type: AWS::CloudFormation::Stack
-    DependsOn: IAM
     Properties:
       Parameters:
         DomainName: !Sub ${DomainName}-${AWS::Region}
         UserProfileName: !Sub ${UserProfileName}-${AWS::Region}
-        VpcId: !GetAtt VPC.Outputs.VPCId
+        ProjectName: !Ref ProjectName
+        VPCId: !GetAtt VPC.Outputs.VPCId
         SageMakerStudioSubnetIds: !GetAtt VPC.Outputs.SageMakerStudioSubnetId
         SageMakerSecurityGroupIds: !GetAtt VPC.Outputs.SageMakerSecurityGroupId
         SageMakerExecutionRoleArn: !GetAtt IAM.Outputs.ExecutionRoleArn
@@ -85,6 +83,9 @@ Outputs:
   VPCId:
     Description: The ID of VPC where SageMaker Studio will reside
     Value: !GetAtt VPC.Outputs.VPCId
+  S3VPCEndpointId: 
+    Description: The ID of the S3 VPC endpoint
+    Value: !GetAtt VPC.Outputs.S3VPCEndpointId
   SageMakerStudioSubnetId:
     Description: The ID of the SageMaker subnet
     Value: !GetAtt VPC.Outputs.SageMakerStudioSubnetId
@@ -94,11 +95,11 @@ Outputs:
   SageMakerExecutionRoleArn:
     Description: IAM Execution role for SageMaker Studio and SageMaker notebooks
     Value: !GetAtt IAM.Outputs.ExecutionRoleArn
-  KMSCMKEBSArn:
-    Description: KMS CMK arn for SageMaker notebooks EBS encryption
+  KMSKeyEBSArn:
+    Description: KMS key arn for SageMaker notebooks EBS encryption
     Value: !GetAtt IAM.Outputs.KMSKeyArn
-  KMSCMKS3bucketsArn:
-    Description: KMS CMK arn for data encryption in S3 buckets
+  KMSKeyS3bucketsArn:
+    Description: KMS key arn for data encryption in S3 buckets
     Value: !GetAtt S3.Outputs.KMSKeyArn
   SageMakerS3bucketData:
     Description: Name of S3 bucket for data

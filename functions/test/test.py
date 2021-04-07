@@ -7,8 +7,8 @@ import sagemakerdomain
 import userprofile
 
 # Data setup
-DomainName = "sagemaker-demo-domain-us-west-2"
-UserProfileName = "demouser-profile-us-west-2"
+DomainName = "sagemaker-anfw-domain-us-west-2"
+UserProfileName = "anfw-user-profile-us-west-2"
 VpcId = "vpc-0c25c864656aabc20"
 SageMakerStudioSubnetIds = "subnet-08e7d40bfef63e5ea"
 SageMakerSecurityGroupIds = "sg-04cf8c6953e01b74c"
