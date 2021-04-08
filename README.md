@@ -285,7 +285,7 @@ The solution deploys the following resources:
     - Network Firewall subnet
 - Internet Gateway, NAT Gateway, Network Firewall, and Firewall endpoint in the Network Firewall subnet
 - Network Firewall Policy
-- Stateful rule group with a deny domain list with a single domain on the list
+- Stateful rule group with an allow domain list with a single domain on the list
 - Elastic IP allocated to the NAT Gateway
 - Security Groups:
     - SageMaker security group
@@ -374,7 +374,7 @@ The bucket **must** be in the same region where you are deploying. You specificy
 
 The stack will deploy all needed resources like VPC, network devices, route tables, security groups, S3 buckets, IAM policies and roles, VPC endpoints and also create a new SageMaker studio domain, and a new user profile.
 
-After deployment completes, you can see the full list of stack output values by running the following command in a terminal:
+The deployment takes about 25 minutes to complete. After deployment completes, you can see the full list of stack output values by running the following command in a terminal:
 ```bash
 aws cloudformation describe-stacks \
     --stack-name sagemaker-studio-demo \
@@ -400,12 +400,12 @@ Take a look to the following components and services created by the deployment:
 - VPC setup
 - Subnets
 - Network devices (NAT Gateway, Network Firewall) and the route tables
-- Security groups
+- Deployed security groups (SageMaker and VPC Endpoints security groups) and their ingress and egress rules
 - S3 VPC endpoint setup with the endpoint policy 
 - S3 VPC interface endpoints for AWS public services
 - S3 buckets (named `<project_name>-<region>-models` and `<project_name>-<region>-data`) with the bucket policy. You can try and see that there is no AWS console access to the solution buckets (`data` and `models`). When you try to list the bucket content in AWS console you will get `AccessDenied` exception
 - Network Firewall routing setup. You might want to read through [8] to familirize yourself with different types of AWS Network Firewall deployment
-- Firewall policy with a stateful rule group with a deny domain list. There is a single domain `.kaggle.com` on the list
+- Firewall policy with a stateful rule group with an allow domain list. There is a single domain `.kaggle.com` on the list
 - SageMaker IAM execution role
 - KMS CMKs for EBS and S3 bucket encryption
 
@@ -455,12 +455,29 @@ Now add the follwing statement to the S3 VPC endpoint policy:
 
 Command line:
 ```bash
-VPCE_ID=
-POLICY_FILE_NAME=
+cat <<EoF >s3-vpce-policy.json
+{
+    "Effect": "Allow",
+    "Principal": "*",
+    "Action": [
+    "s3:GetObject"
+    ],
+    "Resource": "*",
+    "Condition": {
+    "StringEqualsIgnoreCase": {
+        "s3:ExistingObjectTag/SageMaker": "true"
+    }
+    }
+}
+EoF
+```
+
+```bash
+VPCE_ID=# VPC Id from the stack output
 
 aws ec2 modify-vpc-endpoint \
     --vpc-endpoint-id $VPCE_ID \
-    --policy-document file://$POLICY_FILE_NAME
+    --policy-document file://s3-vpce-policy.json
 ```
 
 - Refresh the JumpPage start page - now you have access to all JumpStart resources
@@ -475,8 +492,8 @@ This operation will delete the whole stack together with SageMaker Studio Domain
 
 1. Exit all instances SageMaker Studio.
 2. Check if KernelGateway is running (in the SageMaker Studio control panel in AWS Console). If yes, delete KernelGateway and wait until the deletion process finishes
-3. If you enable logging configuration for Network Firewall, remove it from the Firewall Details (AWS Console)
-4. If you change the stateful rule group in the firewall policy, delete all added domain names leaving only the original name (`.kaggle.com`)
+3. If you enabled logging configuration for Network Firewall, remove it from the Firewall Details (AWS Console)
+4. If you changed the stateful rule group in the firewall policy, delete all added domain names leaving only the original name (`.kaggle.com`)
 5. Delete the stack:
 ```bash
 make delete
@@ -495,19 +512,20 @@ The deployment of Amazon SageMaker Studio creates a new EFS file system in your 
 ❗ **This is a destructive action. All data on the EFS file system will be deleted (SageMaker home directories). You may want to backup the EFS file system before deletion**
 
 From AWS console:  
-- Go to the EFS console and delete all mounting points in all private subnets of the data science VPC for the SageMaker EFS file system
-- delete the SageMaker EFS system. You may want to backup the EFS file system before deletion
+- Delete the SageMaker EFS system (from the EFS AWS console). You may want to backup the EFS file system before deletion
 - Go to the VPC console and delete the SageMaker Studio VPC
 
-## Delete stack troubleshooting
+## Stack deletion troubleshooting
 Sometimes stack might fail to delete. If stack deletion fails, check the events in the AWS CloudFormation console.
 
 If the deletion of the SageMaker domain fails, check if there are any running applications (e.g. KernelGateway) for the user profile as described in [Delete Amazon SageMaker Studio Domain](https://docs.aws.amazon.com/sagemaker/latest/dg/gs-studio-delete-domain.html). Try to delete the applications and re-run the `make delete` command or delete the stack from AWS CloudFormation console.
 
+If the deletion of the Network Firewall fails, check is you removed the logging configuration and the stateful rule group is in the original state.
+
 # Resources
 [1]. [SageMaker Security](https://docs.aws.amazon.com/sagemaker/latest/dg/security.html)  
 [2]. [SageMaker Infrastructure Security](https://docs.aws.amazon.com/sagemaker/latest/dg/infrastructure-security.html)  
-[3]. I took the initial version of the CloudFormation templates for deployment of VPC, Subnets and S3 buckets from this [GitHub repository](https://github.com/aws-samples/amazon-sagemaker-studio-vpc-blog)  
+[3]. Initial version of the CloudFormation templates for deployment of VPC, Subnets, and S3 buckets is taken from this [GitHub repository](https://github.com/aws-samples/amazon-sagemaker-studio-vpc-blog)  
 [4]. Blog post for the repository: [Securing Amazon SageMaker Studio connectivity using a private VPC](https://aws.amazon.com/blogs/machine-learning/securing-amazon-sagemaker-studio-connectivity-using-a-private-vpc/)  
 [5]. [Secure deployment of Amazon SageMaker resources](https://aws.amazon.com/blogs/security/secure-deployment-of-amazon-sagemaker-resources/)  
 [6]. Security-focused workshop [Amazon SageMaker Workshop: Building Secure Environments](https://sagemaker-workshop.com/security_for_sysops.html)  
@@ -516,9 +534,9 @@ If the deletion of the SageMaker domain fails, check if there are any running ap
 [9]. [VPC Ingress Routing – Simplifying Integration of Third-Party Appliances](https://aws.amazon.com/blogs/aws/new-vpc-ingress-routing-simplifying-integration-of-third-party-appliances/)  
 [10]. [Host SageMaker workloads in a private VPC](https://docs.aws.amazon.com/sagemaker/latest/dg/host-vpc.html)  
 [11]. [Understanding Amazon SageMaker notebook instance networking configurations and advanced routing options](https://aws.amazon.com/blogs/machine-learning/understanding-amazon-sagemaker-notebook-instance-networking-configurations-and-advanced-routing-options/)  
-[12]. [Create Amazon SageMaker Studio using AWS CloudFormation](https://aws.amazon.com/blogs/machine-learning/creating-amazon-sagemaker-studio-domains-and-user-profiles-using-aws-cloudformation/)
-[13]. [Building secure machine learning environments with Amazon SageMaker](https://aws.amazon.com/blogs/machine-learning/building-secure-machine-learning-environments-with-amazon-sagemaker/)
-[14]. [Secure Data Science Reference Architecture GitHub](https://github.com/aws-samples/secure-data-science-reference-architecture)
+[12]. [Create Amazon SageMaker Studio using AWS CloudFormation](https://aws.amazon.com/blogs/machine-learning/creating-amazon-sagemaker-studio-domains-and-user-profiles-using-aws-cloudformation/)  
+[13]. [Building secure machine learning environments with Amazon SageMaker](https://aws.amazon.com/blogs/machine-learning/building-secure-machine-learning-environments-with-amazon-sagemaker/)  
+[14]. [Secure Data Science Reference Architecture GitHub](https://github.com/aws-samples/secure-data-science-reference-architecture)  
 
 
 # Appendix
@@ -529,8 +547,8 @@ The following commands show how you can create Studio Domain and user profile fr
 ### Create an Amazon SageMaker Studio domain inside a VPC
 Please replace the variables with corresponding values from `sagemaker-studio-vpc` CloudFormation stack output:
 ```bash
-REGION=
-VPC_DOMAIN_NAME=
+REGION=$AWS_DEFAULT_REGION
+SM_DOMAIN_NAME=# SageMaker domain name
 VPC_ID=
 SAGEMAKER_STUDIO_SUBNET_IDS=
 SAGEMAKER_SECURITY_GROUP=
@@ -538,14 +556,14 @@ EXECUTION_ROLE_ARN=
 
 aws sagemaker create-domain \
     --region $REGION \
-    --domain-name $VPC_DOMAIN_NAME \
+    --domain-name $SM_DOMAIN_NAME \
     --vpc-id $VPC_ID \
     --subnet-ids $SAGEMAKER_STUDIO_SUBNET_IDS \
     --app-network-access-type VpcOnly \
     --auth-mode IAM \
     --default-user-settings "ExecutionRole=${EXECUTION_ROLE_ARN},SecurityGroups=${SAGEMAKER_SECURITY_GROUP}"
 ```
-Note the `domain id` from the `DomainArm` returned by the previous call:
+Note the `domain id` from the `DomainArm` returned by the `create-domain` call:
 
 "DomainArn": "arn:aws:sagemaker:eu-west-1:ACCOUNT_ID:domain/**d-ktlfey9wdfub**"
 
