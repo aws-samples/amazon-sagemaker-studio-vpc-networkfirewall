@@ -479,6 +479,19 @@ Resources:
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ecr.api'
       VpcId: !Ref VPC
 
+  VPCEndpointServiceCatalog:
+    Type: 'AWS::EC2::VPCEndpoint'
+    Properties:
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref SageMakerStudioSubnet
+      SecurityGroupIds:
+        - !Ref VPCEndpointsSecurityGroup
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.servicecatalog'
+      VpcId: !Ref VPC
+
+
 Outputs:
   VPCId:
     Description: The ID of VPC where SageMaker Studio will reside
