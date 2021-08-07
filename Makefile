@@ -32,11 +32,14 @@ delete:
 		--stack-name $(APP_STACK_NAME)
 	
 build: 
+	rm -fr ${BUILD_DIR}
+	mkdir -p ${BUILD_DIR}
 
 package: build 
 	aws cloudformation package \
 		--template-file $(CFN_TEMPLATE_DIR)/sagemaker-studio-vpc.yaml \
 		--s3-bucket $(CFN_ARTEFACT_S3_BUCKET) \
+		--s3-prefix $(PROJECT_NAME) \
 		--output-template-file $(BUILD_DIR)/packaged.yaml
 
 deploy: package

@@ -1,6 +1,6 @@
 # Amazon SageMaker Studio in a private VPC with NAT Gateway and Network Firewall
 
-This solution demonstrates the setup and deployment of Amazon SageMaker Studio into a private VPC and implementation of multi-layer security controls, such as data encryption, network traffic monitoring and restriction, usage of VPC endpoints, subnets and security groups, and IAM resource policies.
+This solution demonstrates the setup and deployment of Amazon SageMaker Studio into a private VPC and implementation of multi-layer security controls, such as data encryption, network traffic monitoring and restriction, usage of VPC endpoints, subnets and security groups, and IAM resource policies. This source code repository is for the [Securing Amazon SageMaker Studio internet traffic using AWS Network Firewall](https://aws.amazon.com/blogs/machine-learning/securing-amazon-sagemaker-studio-internet-traffic-using-aws-network-firewall/) post on the [AWS Machine Learning Blog](https://aws.amazon.com/blogs/machine-learning/).
 
 The use case is a real-life environment security setup, which generally requires the following security-related features to be in place:
 - End-to-end data encryption at rest and in transit
@@ -185,7 +185,7 @@ If you want to provide internet access through your VPC, just add an internet ga
 
 You can use the [AWS Network Firewall](https://aws.amazon.com/network-firewall/) to implement URL, IP address, and domain-based stateful and stateless inbound and outbound traffic filtering.
 
-This solution demostrates the usage of the AWS Network Firewalls for domain names stateful filtering as a sample use case.
+This solution demonstrates the usage of the AWS Network Firewalls for domain names stateful filtering as a sample use case.
 
 ## Enforce secure deployment of SageMaker resources
 Three approaches for deploying Amazon SageMaker resources securely:
@@ -223,7 +223,7 @@ Security-specific examples of the condition keys:
 - `sagemaker:OutputKmsKey`
 
 ### Example: Enforce usage of network isolation mode
-To enforce usage of resource secure configuration, you can add the following policy to the SageMaker excecution role:
+To enforce usage of resource secure configuration, you can add the following policy to the SageMaker execution role:
 ```json
 {
     "Version": "2012-10-17",
@@ -370,7 +370,9 @@ aws s3 mb s3://<your s3 bucket name>
 make deploy CFN_ARTEFACT_S3_BUCKET=<your s3 bucket name>
 ```
 
-The bucket **must** be in the same region where you are deploying. You specificy just the bucket name, not a S3 URL or a bucket ARN.
+You can specify non-default values for stack parameters in the `make deploy` command. See [`Makefile`](Makefile) for parameter names.
+
+The bucket **must** be in the same region where you are deploying. You specify just the bucket name, not a S3 URL or a bucket ARN.
 
 The stack will deploy all needed resources like VPC, network devices, route tables, security groups, S3 buckets, IAM policies and roles, VPC endpoints and also create a new SageMaker studio domain, and a new user profile.
 
@@ -395,7 +397,7 @@ aws sagemaker create-presigned-domain-url \
 # Demo
 Start the Amazon SageMaker Studio from the pre-signed URL or via the AWS SageMaker console.
 
-## Infrastructure walkthrough
+## Infrastructure walk-through
 Take a look to the following components and services created by the deployment:
 - VPC setup
 - Subnets
@@ -404,7 +406,7 @@ Take a look to the following components and services created by the deployment:
 - S3 VPC endpoint setup with the endpoint policy 
 - S3 VPC interface endpoints for AWS public services
 - S3 buckets (named `<project_name>-<region>-models` and `<project_name>-<region>-data`) with the bucket policy. You can try and see that there is no AWS console access to the solution buckets (`data` and `models`). When you try to list the bucket content in AWS console you will get `AccessDenied` exception
-- Network Firewall routing setup. You might want to read through [8] to familirize yourself with different types of AWS Network Firewall deployment
+- Network Firewall routing setup. You might want to read through [8] to familiarize yourself with different types of AWS Network Firewall deployment
 - Firewall policy with a stateful rule group with an allow domain list. There is a single domain `.kaggle.com` on the list
 - SageMaker IAM execution role
 - KMS CMKs for EBS and S3 bucket encryption
@@ -436,7 +438,7 @@ Now we are going to change the S3 VPC endpoint policy and to allow access to add
 The access is denied because the S3 VPC endpoint policy doesn't allow access to any S3 buckets except for `models` and `data` as configured in the endpoint policy:
 ![S3 access denied](design/jumpstart-no-access-s3.png)
 
-Now add the follwing statement to the S3 VPC endpoint policy:
+Now add the following statement to the S3 VPC endpoint policy:
 ```json
     {
       "Effect": "Allow",
@@ -485,7 +487,7 @@ aws ec2 modify-vpc-endpoint \
 We have seen now, that you can control access to S3 buckets via combination of S3 bucket policy and S3 Endpoint policy.
 
 ## Controlling internet access
-This [blog post](link) shows how the internet ingress and egress for SageMaker Studio can be controled with AWS Network Firewall.
+This [blog post](link) shows how the internet ingress and egress for SageMaker Studio can be controlled with AWS Network Firewall.
 
 # Clean up
 This operation will delete the whole stack together with SageMaker Studio Domain and user profile.
@@ -502,7 +504,7 @@ make delete
 Alternatively you can delete the stack from the AWS CloudFormation console.
 
 ## Delete left-over resources
-The deployment of Amazon SageMaker Studio creates a new EFS file system in your account. When you delete the data science enviroment stack, the SageMaker Studio domain, user profile and Apps are also deleted. However, the EFS file system **will not be deleted** and kept "as is" in your account (EFS file system contains home directories for SageMaker Studio users and may contain your data). Additional resources are created by SageMaker Studio and retained upon deletion together with the EFS file system:
+The deployment of Amazon SageMaker Studio creates a new EFS file system in your account. When you delete the data science environment stack, the SageMaker Studio domain, user profile and Apps are also deleted. However, the EFS file system **will not be deleted** and kept "as is" in your account (EFS file system contains home directories for SageMaker Studio users and may contain your data). Additional resources are created by SageMaker Studio and retained upon deletion together with the EFS file system:
 - EFS mounting points in each private subnet of your VPC
 - ENI for each mounting point
 - Security groups for EFS inbound and outbound traffic
@@ -523,7 +525,7 @@ If the deletion of the SageMaker domain fails, check if there are any running ap
 If the deletion of the Network Firewall fails, check is you removed the logging configuration and the stateful rule group is in the original state.
 
 # Resources
-[1]. [SageMaker Security](https://docs.aws.amazon.com/sagemaker/latest/dg/security.html)  
+[1]. [SageMaker Security in the Developer Guide](https://docs.aws.amazon.com/sagemaker/latest/dg/security.html)  
 [2]. [SageMaker Infrastructure Security](https://docs.aws.amazon.com/sagemaker/latest/dg/infrastructure-security.html)  
 [3]. Initial version of the CloudFormation templates for deployment of VPC, Subnets, and S3 buckets is taken from this [GitHub repository](https://github.com/aws-samples/amazon-sagemaker-studio-vpc-blog)  
 [4]. Blog post for the repository: [Securing Amazon SageMaker Studio connectivity using a private VPC](https://aws.amazon.com/blogs/machine-learning/securing-amazon-sagemaker-studio-connectivity-using-a-private-vpc/)  
