@@ -83,7 +83,7 @@ Resources:
         - Key: Name
           Value: !Sub sg-sagemaker-${ProjectName}
 
-  # Self-referencing the security group to enable communication between intances within the same SG
+  # Self-referencing the security group to enable communication between instances within the same SG
   SageMakerSecurityGroupIngress:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
@@ -116,6 +116,7 @@ Resources:
               - TLS_SNI
             Targets: 
               - ".kaggle.com"
+              - ".amazonaws.com"
             GeneratedRulesType: "ALLOWLIST"
       Tags:
         - Key: Name
@@ -124,7 +125,7 @@ Resources:
   FirewallPolicy:
     Type: AWS::NetworkFirewall::FirewallPolicy
     Properties: 
-      Description: Network firewall policy to control SageMaker Studio internet ergress and ingress
+      Description: Network firewall policy to control SageMaker Studio internet egress and ingress
       FirewallPolicyName: !Sub "network-firewall-policy-${ProjectName}"
       FirewallPolicy: 
         StatelessDefaultActions: 
@@ -154,7 +155,7 @@ Resources:
     Type: AWS::NetworkFirewall::Firewall
     Properties: 
       DeleteProtection: false
-      Description: AWS Network Firewall to control internet ergress and ingress
+      Description: AWS Network Firewall to control internet egress and ingress
       FirewallName: !Sub "network-firewall-${ProjectName}"
       FirewallPolicyArn: !Ref FirewallPolicy
       FirewallPolicyChangeProtection: false
@@ -228,7 +229,7 @@ Resources:
       SubnetId: !Ref SageMakerStudioSubnet
 
   # Routes
-  # Since we have only one-AZ Firewall setup, we take the first Network Firewall VPC eindpoint from the EndpointsIds list
+  # Since we have only one-AZ Firewall setup, we take the first Network Firewall VPC endpoint from the EndpointsIds list
   # This will not work in multi-AZ setup!
   IGWIngressRoute:
     Type: AWS::EC2::Route
@@ -244,7 +245,7 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref IGW
 
-  # Since we have only one-AZ Firewall setup, we take the first Network Firewall VPC eindpoint from the EndpointsIds list
+  # Since we have only one-AZ Firewall setup, we take the first Network Firewall VPC endpoint from the EndpointsIds list
   # This will not work in multi-AZ setup!
   NATGatewayEgressRoute:
     Type: AWS::EC2::Route
