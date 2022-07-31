@@ -297,8 +297,8 @@ The solution deploys the following resources:
 
 ## S3 resources
 The solution deploys two Amazon S3 buckets: 
-- `<project_name>-<region>-data`  
-- `<project_name>-<region>-models`
+- `<project_name>-<account_id>-<region>-data`  
+- `<project_name>-<account_id>-<region>-models`
 
 Both buckets have a bucket policy attached. The bucket policy explicitly denies all access to the bucket which does not come from the designated VPC endpoint.
 The Amazon S3 VPC endpoint has also a policy attached to it. This policy allows access the the two S3 buckets (`model` and `data`) only.
@@ -323,9 +323,9 @@ The solution creates:
 ## Prerequisites
 - An AWS Account
 - An IAM user or role with administrative access
-- configured `aws cli` with that IAM user, role credentials, or temporary credentials
+- configured [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-getting-started.html) with an IAM user, role credentials, or temporary credentials
 - An Amazon S3 bucket in your account in the same region where you deploy the solution (or you can create one as described below)
-- Your deployment region is `us-east-1`, `us-east-2`, `us-west-2`, `eu-west-1`, `eu-central-1`, `eu-north-1`, `ap-southeast-2`, or `ap-northeast-1`. AWS Network Firewall is [available](https://aws.amazon.com/network-firewall/faqs/) in the US East (N. Virginia, Ohio), US West (Oregon), Europe (Ireland, Frankfurt, Stockholm), and Asia Pacific (Sydney, Tokyo) regions
+- Your deployment region is one of the regions where AWS Network Firewall is available. For information on regional availability for AWS Network Firewall, see the [AWS region table](https://aws.amazon.com/about-aws/global-infrastructure/regional-product-services/).
   
 ❗ For CloudFormation template deployment you must use the S3 bucket in the **same region** as your deployment region.
 If you need to deploy the solution in multiple regions, you need to create a bucket per region and specify the corresponding bucket name in the `make deploy` call as shown below.
@@ -377,22 +377,25 @@ The bucket **must** be in the same region where you are deploying. You specify j
 The stack will deploy all needed resources like VPC, network devices, route tables, security groups, S3 buckets, IAM policies and roles, VPC endpoints and also create a new SageMaker studio domain, and a new user profile.
 
 The deployment takes about 25 minutes to complete. After deployment completes, you can see the full list of stack output values by running the following command in a terminal:
-```bash
+```sh
 aws cloudformation describe-stacks \
     --stack-name sagemaker-studio-demo \
     --output table \
     --query "Stacks[0].Outputs[*].[OutputKey, OutputValue]"
 ```
 
-You can now launch the Amazon SageMaker Studio from the SageMaker console or generate a pre-signed URL and launch the Studio from the browser:
-```bash
-DOMAIN_ID=# SageMakerStudioDomainId from the stack output
-USER_PROFILE_NAME=# UserProfileName from the stack output
+You can now launch the Amazon SageMaker Studio from the [SageMaker console](https://console.aws.amazon.com/sagemaker/home) or generate a pre-signed URL with the following CLI commands: 
+```sh
+export DOMAIN_ID=$(aws sagemaker list-domains --output text --query 'Domains[0].DomainId')
+export USER_PROFILE_NAME=$(aws sagemaker list-user-profiles --domain-id=$DOMAIN_ID --output text --query 'UserProfiles[0].UserProfileName')
 
 aws sagemaker create-presigned-domain-url \
     --domain-id $DOMAIN_ID \
-    --user-profile-name $USER_PROFILE_NAME
+    --user-profile-name $USER_PROFILE_NAME \
+    --output text \
+    --query 'AuthorizedUrl'
 ```
+Paste the output of the `create-presigned-domain-url` command into a browser, you will be redirected to the Studio.
 
 # Demo
 Start the Amazon SageMaker Studio from the pre-signed URL or via the AWS SageMaker console.
@@ -405,7 +408,7 @@ Take a look to the following components and services created by the deployment:
 - Deployed security groups (SageMaker and VPC Endpoints security groups) and their ingress and egress rules
 - S3 VPC endpoint setup with the endpoint policy 
 - S3 VPC interface endpoints for AWS public services
-- S3 buckets (named `<project_name>-<region>-models` and `<project_name>-<region>-data`) with the bucket policy. You can try and see that there is no AWS console access to the solution buckets (`data` and `models`). When you try to list the bucket content in AWS console you will get `AccessDenied` exception
+- S3 buckets (named `<project_name>-<account_id>-<region>-models` and `<project_name>-<account_id>-<region>-data`) with the bucket policy. You can try and see that there is no AWS console access to the solution buckets (`data` and `models`). When you try to list the bucket content in AWS console you will get `AccessDenied` exception
 - Network Firewall routing setup. You might want to read through [8] to familiarize yourself with different types of AWS Network Firewall deployment
 - Firewall policy with a stateful rule group with an allow domain list. There is a single domain `.kaggle.com` on the list
 - SageMaker IAM execution role
@@ -414,22 +417,38 @@ Take a look to the following components and services created by the deployment:
 ## S3 access 
 - open a notebook in SageMaker Studio.
 - create a file 
-```
-!touch test-file.txt
-```
+    ```
+    !touch test-file.txt
+    ```
 - copy file to `data` S3 bucket
-```
-!aws s3 cp test-file.txt s3://<project_name>-<region>-data
-```
-- the operation must be successful
+    ```
+    !aws s3 cp test-file.txt s3://<project_name>-<account_id>-<region>-data
+    ```
+    The operation must be successful.
 
-- try to copy the file to any other bucket or list any other bucket: AccessDenied error
-```
-!aws s3 ls s3://<any other bucket in your account>
-```
-- try to list the `<project_name>-<region>-data` bucket from a command line (in a terminal, not in the notebook instance): AccessDenied error
+- try to copy the file to any other bucket or list any other bucket:
+    ```
+    !aws s3 cp test-file.txt s3://<any other bucket in your account>
+    ```
+    You'll get an `AccessDenied` exception: `An error occurred (AccessDenied) when calling the PutObject operation: Access Denied`
 
-SageMaker Studio has access to only the designated buckets (`models` and `data`). You will not be able to use [SageMaker JumpStart](https://docs.aws.amazon.com/sagemaker/latest/dg/studio-jumpstart.html) or any other SageMaker Studio functionality which requires access to other Amazon S3 buckets. To enable access to other S3 buckets you have to change the S3 VPC endpoint policy.
+- try to list `-data` or `-models` S3 buckets:
+    ```
+    !aws s3 ls s3://<project_name>-<account_id>-<region>-data
+    ```
+    The operation must be successful.
+
+- try to list any other bucket in our account:
+    ```
+    !aws s3 ls s3://<any other bucket in your account>
+    ```
+    You'll get an `AccessDenied` exception: `An error occurred (AccessDenied) when calling the ListObjectsV2 operation: Access Denied`
+
+- try to list the `<project_name>-<account_id>-<region>-data` bucket from a command line outside of Studio. You'll get an `AccessDenied` error.
+
+SageMaker Studio has access to the designated S3 buckets (`-models` and `-data`) and to these S3 buckets only. The access to S3 buckets is controlled by a combination of the S3 VPC endpoint policy and the S3 bucket policy.
+
+❗ Note, you are not able to use [SageMaker JumpStart](https://docs.aws.amazon.com/sagemaker/latest/dg/studio-jumpstart.html) or any other SageMaker Studio functionality which requires access to other Amazon S3 buckets. To enable access to other S3 buckets you have to change the S3 VPC endpoint policy.
 
 Now we are going to change the S3 VPC endpoint policy and to allow access to additional S3 resources.
 - First, try to open SageMaker Studio JumpStart:
@@ -487,21 +506,28 @@ aws ec2 modify-vpc-endpoint \
 We have seen now, that you can control access to S3 buckets via combination of S3 bucket policy and S3 Endpoint policy.
 
 ## Controlling internet access
-This [blog post](link) shows how the internet ingress and egress for SageMaker Studio can be controlled with AWS Network Firewall.
+The [AWS Machine Learning blog](https://aws.amazon.com/blogs/machine-learning/) post [Securing Amazon SageMaker Studio internet traffic using AWS Network Firewall](https://aws.amazon.com/blogs/machine-learning/securing-amazon-sagemaker-studio-internet-traffic-using-aws-network-firewall/) shows how the internet ingress and egress for SageMaker Studio can be controlled with AWS Network Firewall.
 
 # Clean up
 This operation will delete the whole stack together with SageMaker Studio Domain and user profile.
 
+The stack deletion operations will fail, if there are any objects in `-models` and `-data` S3 buckets. Before starting stack deletion, you must delete **all objects** in these S3 buckets.
+
+As there is no access to these S3 buckets outside of the SageMaker VPC, you must run the following commands in Studio terminal:
+```sh
+aws s3 rm s3://<project_name>-<account_id>-<region>-data --recursive --quiet
+aws s3 rm s3://<project_name>-<account_id>-<region>-models --recursive --quiet
+```
+
+Follow these steps to delete the solution stack:
 1. Exit all instances SageMaker Studio.
 2. Check if KernelGateway is running (in the SageMaker Studio control panel in AWS Console). If yes, delete KernelGateway and wait until the deletion process finishes
 3. If you enabled logging configuration for Network Firewall, remove it from the Firewall Details (AWS Console)
-4. If you changed the stateful rule group in the firewall policy, delete all added domain names leaving only the original name (`.kaggle.com`)
-5. Delete the stack:
-```bash
+4. If you changed the stateful rule group in the firewall policy, delete all added domain names leaving only the original domains: `.kaggle.com`, `.amazonaws.com`
+5. Delete the stack via the AWS CloudFormation console or via the command line:
+```sh
 make delete
 ```
-
-Alternatively you can delete the stack from the AWS CloudFormation console.
 
 ## Delete left-over resources
 The deployment of Amazon SageMaker Studio creates a new EFS file system in your account. When you delete the data science environment stack, the SageMaker Studio domain, user profile and Apps are also deleted. However, the EFS file system **will not be deleted** and kept "as is" in your account (EFS file system contains home directories for SageMaker Studio users and may contain your data). Additional resources are created by SageMaker Studio and retained upon deletion together with the EFS file system:

@@ -7,7 +7,7 @@ Description: "Amazon SageMaker Studio secure deployment demo. The deployment cre
 Parameters:
   ProjectName:
     Type: String
-    Default: sagemaker-studio-vpc-firewall
+    Default: sagemaker-studio-anfw
   DomainName:
     Description: SageMaker domain name
     Type: String
@@ -61,8 +61,8 @@ Resources:
         FirewallSubnetCIDR: !Ref FirewallSubnetCIDR
         NATGatewaySubnetCIDR: !Ref NATGatewaySubnetCIDR
         SageMakerStudioSubnetCIDR: !Ref SageMakerStudioSubnetCIDR
-        DataBucketName: !Sub ${ProjectName}-${AWS::Region}-data
-        ModelBucketName: !Sub ${ProjectName}-${AWS::Region}-models
+        DataBucketName: !Sub ${ProjectName}-${AWS::AccountId}-${AWS::Region}-data
+        ModelBucketName: !Sub ${ProjectName}-${AWS::AccountId}-${AWS::Region}-models
       TemplateURL: vpc.yaml
   
   # SageMaker domain, user profile and pre-signed URL
